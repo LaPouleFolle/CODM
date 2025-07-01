@@ -75,7 +75,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🪖 CODM Joueur Booster")
+st.title("CODM - Booster vos performance (NB : je fais pas allusion au POUTOULOU voila)")
 st.subheader("Analyse ton profil et reçois des conseils stratégiques ga !")
 
 with st.form("stats_form"):
