@@ -4,6 +4,8 @@ import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import json
+import plotly.graph_objects as go
 
 # ----------------------
 # Fonctions d'analyse
@@ -35,7 +37,8 @@ def recommander_build(arme):
         "Kilo 141": "Canon RTC long, Viseur classique, Crosse stable, Chargeur rapide, Laser OWC",
         "USS 9": "-----------------------------------------------",
         "VMP": "--------------------------------------------------",
-        "Oden": "---------------------------------------------------", "etc": "",
+        "Oden": "---------------------------------------------------",
+        "etc": "",
     }
     return equipements.get(arme, "Aucun build trouvé. Essaie une arme plus populaire ga arrete d'être guezz.")
 
@@ -82,11 +85,14 @@ with st.form("stats_form"):
     pseudo = st.text_input("Ton pseudo CODM")
     kd_ratio = st.number_input("Ton K/D Ratio", min_value=0.0, step=0.01)
     win_rate = st.slider("Ton taux de victoire (%)", 0, 100, 50)
+    reflexes = st.slider("Réflexes (1-10)", 1, 10, 5)
+    strategy = st.slider("Stratégie (1-10)", 1, 10, 5)
+    mobility = st.slider("Mobilité (1-10)", 1, 10, 5)
     arme_pref = st.text_input("Ton arme préférée ? (ex: DL Q33, RPD, AK117, Fennec, Kilo 141)")
     mode_pref = st.selectbox("Ton mode préféré", ["Multijoueur", "Battle Royale", "Zombie"])
 
     if mode_pref == "Multijoueur":
-        map_pref = st.selectbox("Carte multijoueur", ["Nuketown", "Firing Range", "Summit", "Take Off", "Apocalyste","Vacant", "Combine"])
+        map_pref = st.selectbox("Carte multijoueur", ["Nuketown", "Firing Range", "Summit", "Take Off", "Apocalyste", "Vacant", "Combine"])
     elif mode_pref == "Battle Royale":
         map_pref = st.selectbox("Zone de drop", ["Black Market", "Dormitory", "Launch Base"])
     else:
@@ -111,39 +117,45 @@ if submit:
     st.subheader("Stratégie personnalisée selon ta carte")
     st.write(strategie_par_map(mode_pref, map_pref))
 
-    # Enregistrement dans CSV
-    stats_file = "stats_codm.csv"
-    new_data = pd.DataFrame([{
-        "Date": datetime.date.today(),
-        "Pseudo": pseudo,
-        "K/D": kd_ratio,
-        "WinRate": win_rate,
-        "Arme": arme_pref,
-        "Mode": mode_pref,
-        "Carte": map_pref
-    }])
-    if os.path.exists(stats_file):
-        old_data = pd.read_csv(stats_file)
-        all_data = pd.concat([old_data, new_data], ignore_index=True)
-    else:
-        all_data = new_data
-    all_data.to_csv(stats_file, index=False)
-
     st.divider()
-    st.subheader(" Évolution de ton K/D dans le temps")
-    if os.path.exists(stats_file):
-        df = pd.read_csv(stats_file)
-        df_filtered = df[df["Pseudo"] == pseudo]
-        if not df_filtered.empty:
-            df_filtered["Date"] = pd.to_datetime(df_filtered["Date"])
-            df_filtered = df_filtered.sort_values("Date")
-            plt.plot(df_filtered["Date"], df_filtered["K/D"], marker='o')
-            plt.title(f"Progression K/D de {pseudo}")
-            plt.xlabel("Date")
-            plt.ylabel("K/D Ratio")
-            plt.xticks(rotation=45)
-            st.pyplot(plt.gcf())
-        else:
-            st.write("Aucune donnée trouvée pour ce pseudo.")
+    st.subheader("Radar de Compétences")
+    categories = ['Réflexes', 'Stratégie', 'Mobilité']
+    values = [reflexes, strategy, mobility]
+    radar = go.Figure()
+    radar.add_trace(go.Scatterpolar(r=values + [values[0]],
+                                    theta=categories + [categories[0]],
+                                    fill='toself', name=pseudo))
+    radar.update_layout(polar=dict(bgcolor="#1e1e1e"),
+                        paper_bgcolor="#0d1117",
+                        font_color="#facc15",
+                        title="Carte Radar de Compétences")
+    st.plotly_chart(radar, use_container_width=True)
 
-    st.caption(f"Généré le {datetime.date.today()} • Version CODM Booster • Par Arsène le DEMON ")
+    # Sauvegarde JSON pour suivi individuel
+    stats_file = f"stats_{pseudo}.json"
+    today = str(datetime.date.today())
+    data_point = {"date": today, "kd": kd_ratio, "winrate": win_rate}
+    if os.path.exists(stats_file):
+        with open(stats_file, 'r') as f:
+            historique = json.load(f)
+    else:
+        historique = []
+    historique.append(data_point)
+    with open(stats_file, 'w') as f:
+        json.dump(historique, f)
+
+    # Graphe d'évolution K/D
+    st.divider()
+    st.subheader("Évolution de ton K/D dans le temps")
+    dates = [x["date"] for x in historique]
+    kds = [x["kd"] for x in historique]
+    plt.figure(figsize=(10, 4))
+    plt.plot(dates, kds, marker='o', linestyle='-', color='#facc15')
+    plt.xlabel("Date")
+    plt.ylabel("K/D Ratio")
+    plt.title(f"Progression de {pseudo}")
+    plt.xticks(rotation=45)
+    plt.grid(True)
+    st.pyplot(plt.gcf())
+
+    st.caption(f"Généré le {datetime.date.today()} • CODM Booster • Par Arsène le DEMON")
