@@ -31,7 +31,7 @@ def recommander_build(arme):
         "DL Q33": "Silencieux Monolithique, FMJ, Poignée granuleuse, Viseur Tactique, Munitions étendues",
         "RPD": "Compensateur, Poignée lourde, Chargeur rapide, Laser OWC, Crosse tactique",
         "AK117": "Frein de bouche, Viseur Red Dot, Poignée verticale, Chargeur étendu, Atout Agilité",
-        "Fennec": "Poignée ergonomique, Laser tactique, Chargeur grande capacité, Viseur point rouge",
+        "Fennec": "Poignée .... , Laser tactique, Chargeur etendu A, Viseur point rouge",
         "Kilo 141": "Canon RTC long, Viseur classique, Crosse stable, Chargeur rapide, Laser OWC",
         "USS 9": "-----------------------------------------------",
         "VMP": "--------------------------------------------------",
@@ -55,7 +55,7 @@ def strategie_par_map(mode, map_name):
     return strategies.get(mode, {}).get(map_name, " Carte inconnue ou stratégie non disponible.")
 
 # ----------------------
-# Interface Streamlit
+# Mon interface streamlit
 # ----------------------
 st.set_page_config(page_title="CODM Joueur Booster", layout="centered")
 st.markdown("""
@@ -130,7 +130,7 @@ if submit:
     all_data.to_csv(stats_file, index=False)
 
     st.divider()
-    st.subheader("📊 Évolution de ton K/D dans le temps")
+    st.subheader(" Évolution de ton K/D dans le temps")
     if os.path.exists(stats_file):
         df = pd.read_csv(stats_file)
         df_filtered = df[df["Pseudo"] == pseudo]
