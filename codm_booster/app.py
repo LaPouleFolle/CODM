@@ -1,6 +1,9 @@
 import streamlit as st
 import random
 import datetime
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
 
 # ----------------------
 # Fonctions d'analyse
@@ -23,7 +26,6 @@ def analyser_performance(kd_ratio, win_rate):
 
     return niveau, conseils
 
-
 def recommander_build(arme):
     equipements = {
         "DL Q33": "Silencieux Monolithique, FMJ, Poignée granuleuse, Viseur Tactique, Munitions étendues",
@@ -31,12 +33,11 @@ def recommander_build(arme):
         "AK117": "Frein de bouche, Viseur Red Dot, Poignée verticale, Chargeur étendu, Atout Agilité",
         "Fennec": "Poignée ergonomique, Laser tactique, Chargeur grande capacité, Viseur point rouge",
         "Kilo 141": "Canon RTC long, Viseur classique, Crosse stable, Chargeur rapide, Laser OWC",
-        "USS 9" : "-----------------------------------------------",
-        "VMP" : "--------------------------------------------------",
-        "Oden" : "---------------------------------------------------", "etc": "",
+        "USS 9": "-----------------------------------------------",
+        "VMP": "--------------------------------------------------",
+        "Oden": "---------------------------------------------------", "etc": "",
     }
     return equipements.get(arme, "Aucun build trouvé. Essaie une arme plus populaire ga arrete d'être guezz.")
-
 
 def strategie_par_map(mode, map_name):
     strategies = {
@@ -54,7 +55,7 @@ def strategie_par_map(mode, map_name):
     return strategies.get(mode, {}).get(map_name, " Carte inconnue ou stratégie non disponible.")
 
 # ----------------------
-# Mon interface Streamlit
+# Interface Streamlit
 # ----------------------
 st.set_page_config(page_title="CODM Joueur Booster", layout="centered")
 st.markdown("""
@@ -103,11 +104,46 @@ if submit:
             st.write("-", c)
 
     st.divider()
-    st.subheader("Recommandation d'équipement pour ton arme")
+    st.subheader("🔧 Recommandation de build pour ton arme")
     st.write(recommander_build(arme_pref))
 
     st.divider()
     st.subheader("Stratégie personnalisée selon ta carte")
     st.write(strategie_par_map(mode_pref, map_pref))
+
+    # Enregistrement dans CSV
+    stats_file = "stats_codm.csv"
+    new_data = pd.DataFrame([{
+        "Date": datetime.date.today(),
+        "Pseudo": pseudo,
+        "K/D": kd_ratio,
+        "WinRate": win_rate,
+        "Arme": arme_pref,
+        "Mode": mode_pref,
+        "Carte": map_pref
+    }])
+    if os.path.exists(stats_file):
+        old_data = pd.read_csv(stats_file)
+        all_data = pd.concat([old_data, new_data], ignore_index=True)
+    else:
+        all_data = new_data
+    all_data.to_csv(stats_file, index=False)
+
+    st.divider()
+    st.subheader("📊 Évolution de ton K/D dans le temps")
+    if os.path.exists(stats_file):
+        df = pd.read_csv(stats_file)
+        df_filtered = df[df["Pseudo"] == pseudo]
+        if not df_filtered.empty:
+            df_filtered["Date"] = pd.to_datetime(df_filtered["Date"])
+            df_filtered = df_filtered.sort_values("Date")
+            plt.plot(df_filtered["Date"], df_filtered["K/D"], marker='o')
+            plt.title(f"Progression K/D de {pseudo}")
+            plt.xlabel("Date")
+            plt.ylabel("K/D Ratio")
+            plt.xticks(rotation=45)
+            st.pyplot(plt.gcf())
+        else:
+            st.write("Aucune donnée trouvée pour ce pseudo.")
 
     st.caption(f"Généré le {datetime.date.today()} • Version CODM Booster • Par Arsène le DEMON ")
