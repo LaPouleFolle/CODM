@@ -179,54 +179,14 @@ with tab_home:
     conn.close()
 # --- Onglet 2 : analyse 
 with tab_analyse:
-    st.header("🏆 Espace Compétition & Scrims")
-
-    # --- Analyse---
-    with st.expander("📊 Enregistrer mes stats (K/D uniquement)"):
-        with st.form("stats_form"):
-            pseudo = st.text_input("Ton pseudo CODM")
-            kd_ratio = st.number_input("Ton K/D Ratio", min_value=0.0, step=0.01)
-            submit_stats = st.form_submit_button("Valider")
-            
-            if submit_stats and pseudo.strip():
-                sauvegarder_stats_sql(pseudo, kd_ratio, 0) # On met 0 par défaut pour le winrate
-                st.success("Stats enregistrées !")
-
-    st.divider()
-
-    # --- organisation de tournoi? ---
-    col1, col2 = st.columns(2)
+    st.header("Analyse ton Skill")
     
-    with col1:
-        st.subheader("🔥 Organiser")
-        with st.popover("➕ Créer un événement"):
-            type_ev = st.selectbox("Type", ["Scrim (Match amical)", "Tournoi (Compétition)"])
-            date_ev = st.date_input("Date prévue")
-            details = st.text_area("Détails (Format, Map, Récompense...)")
-            if st.button("Publier l'annonce"):
-                # Fonction pour sauvegarder dans la table 'evenements'
-                conn = sqlite3.connect("codm_data.db")
-                c = conn.cursor()
-                c.execute("INSERT INTO evenements VALUES (?, ?, ?, ?)", 
-                          (pseudo if pseudo else "Anonyme", type_ev, str(date_ev), details))
-                conn.commit()
-                conn.close()
-                st.success("Annonce publiée !")
-
-    with col2:
-        st.subheader("📅 Événements à venir")
-        conn = sqlite3.connect("codm_data.db")
-        ev_df = pd.read_sql_query("SELECT * FROM evenements", conn)
-        conn.close()
-
-        if not ev_df.empty:
-            for i, row in ev_df.iterrows():
-                with st.chat_message("user" if row['type'] == "Tournoi" else "assistant"):
-                    st.write(f"**{row['type']}** par *{row['organisateur']}*")
-                    st.write(f"📅 Date : {row['date_evenement']}")
-                    st.caption(row['details'])
-        else:
-            st.write("Aucun scrim prévu pour le moment. Organise le tien !")
+    with st.form("stats_form"):
+        pseudo = st.text_input("Ton pseudo CODM")
+        kd_ratio = st.number_input("Ton K/D Ratio", min_value=0.0, step=0.01)
+        win_rate = st.slider("Ton taux de victoire (%)", 0, 100, 50)
+        arme_pref = st.text_input("Ton arme préférée ?")
+        mode_pref = st.selectbox("Ton mode préféré", ["Multijoueur", "Battle Royale"])
         
         if mode_pref == "Multijoueur":
             map_pref = st.selectbox("Carte", ["Nuketown", "Firing Range", "Summit"])
