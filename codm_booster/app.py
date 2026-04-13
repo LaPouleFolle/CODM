@@ -3,176 +3,235 @@ import datetime
 import pandas as pd
 import sqlite3
 import os
-import json
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="CODM BOOSTER PRO", layout="wide")
+# --- 1. CONFIGURATION DE LA PAGE ---
+st.set_page_config(
+    page_title="CODM ARENA PRO", 
+    page_icon="🎮", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
 
-# --- STYLE CSS (ORANGE & NOIR) ---
+# --- 2. STYLE CSS PERSONNALISÉ (DÉMON MODE) ---
 st.markdown("""
     <style>
-        .stApp { background-color: #0F0F0F; }
-        h1, h2, h3, label, p { color: #FF4D00 !important; font-family: 'Segoe UI', sans-serif; }
-        .stMarkdown { color: white !important; }
-        .stButton>button { 
-            background-color: #FF4D00; color: white; border-radius: 5px; 
-            font-weight: bold; width: 100%; border: none;
+        .stApp { background-color: #0A0A0A; }
+        [data-testid="stHeader"] { background: rgba(0,0,0,0); }
+        
+        /* Titres et Textes */
+        h1, h2, h3 { color: #FF4D00 !important; font-family: 'Arial Black', sans-serif; text-transform: uppercase; }
+        .stMarkdown, p, span { color: #E0E0E0 !important; }
+        
+        /* Cartes d'événements */
+        .event-card {
+            background: #161616;
+            padding: 20px;
+            border-radius: 15px;
+            border-left: 6px solid #FF4D00;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-        .stButton>button:hover { background-color: #CC3D00; box-shadow: 0px 0px 10px #FF4D00; }
-        .stTabs [data-baseweb="tab-list"] { background-color: #1A1A1A; }
-        .stTabs [data-baseweb="tab"] { color: #888; }
-        .stTabs [aria-selected="true"] { color: #FF4D00 !important; border-bottom-color: #FF4D00 !important; }
-        div[data-testid="stMetricValue"] { color: white !important; }
+        
+        /* Inputs et Formulaires */
+        .stTextInput>div>div>input, .stSelectbox>div>div, .stTextArea>div>div>textarea {
+            background-color: #1A1A1A !important;
+            color: white !important;
+            border: 1px solid #333 !important;
+        }
+        
+        /* Boutons */
+        .stButton>button {
+            background: linear-gradient(90deg, #FF4D00 0%, #CC3D00 100%);
+            color: white; border: none; font-weight: bold;
+            padding: 10px 20px; border-radius: 8px; width: 100%;
+        }
+        .stButton>button:hover {
+            box-shadow: 0 0 20px rgba(255, 77, 0, 0.4);
+            transform: translateY(-2px);
+            color: white;
+        }
+        
+        /* Métriques */
+        [data-testid="stMetricValue"] { color: #FF4D00 !important; font-size: 2em !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- BASE DE DONNÉES (ARCHITECTURE AVANCÉE) ---
+# --- 3. LOGIQUE BASE DE DONNÉES (SQL) ---
+def get_connection():
+    return sqlite3.connect("codm_data.db", check_same_thread=False)
+
 def init_db():
-    conn = sqlite3.connect("codm_data.db", check_same_thread=False)
+    conn = get_connection()
     c = conn.cursor()
-    # Table Performances
-    c.execute('CREATE TABLE IF NOT EXISTS performances (pseudo TEXT, kd REAL, date TEXT)')
-    # Table Événements (Scrims/Tournois)
+    # Table Performances (Stats)
+    c.execute('''CREATE TABLE IF NOT EXISTS performances 
+                 (pseudo TEXT, kd REAL, date TEXT)''')
+    # Table Événements (Tournois/Scrims)
     c.execute('''CREATE TABLE IF NOT EXISTS evenements 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, organisateur TEXT, type TEXT, 
                   titre TEXT, date TEXT, details TEXT, cashprize TEXT, status TEXT)''')
-    # Table Inscriptions (Lien entre Joueurs et Événements)
+    # Table Inscriptions
     c.execute('''CREATE TABLE IF NOT EXISTS inscriptions 
-                 (event_id INTEGER, participant TEXT, equipe TEXT, contact TEXT)''')
+                 (event_id INTEGER, participant TEXT, contact TEXT, date_insc TEXT)''')
     conn.commit()
     conn.close()
 
 init_db()
 
-# --- FONCTIONS UTILES ---
-def get_db_connection():
-    return sqlite3.connect("codm_data.db", check_same_thread=False)
+# --- 4. BARRE LATÉRALE (INFOS) ---
+with st.sidebar:
+    st.image("https://upload.wikimedia.org/wikipedia/en/1/17/Call_of_Duty_Mobile_logo.png", width=150)
+    st.title("Admin Panel")
+    access_code = st.text_input("Code Secret", type="password")
+    if access_code == "DEMON":
+        st.success("Accès Autorisé")
+        if st.button("Vider la base de données"):
+            conn = get_connection()
+            conn.execute("DELETE FROM evenements")
+            conn.execute("DELETE FROM inscriptions")
+            conn.commit()
+            conn.close()
+            st.rerun()
 
-# --- INTERFACE PRINCIPALE ---
-st.title("🎮 CODM ARENA : COMMAND CENTER")
+# --- 5. EN-TÊTE PRINCIPAL ---
+st.markdown("<h1 style='text-align: center; font-size: 3.5em;'>CODM ARENA COMMAND</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #888;'>Plateforme de gestion de compétition - Développé par SK DEMON</p>", unsafe_allow_html=True)
 
-tab_home, tab_compete, tab_media = st.tabs(["🏠 ACCUEIL", "🏆 COMPÉTITION & SCRIMS", "📺 COMMUNAUTÉ"])
+tab_home, tab_compete, tab_analyse, tab_contact = st.tabs([
+    "🏠 QUARTIER GÉNÉRAL", "🏆 ARENA DE COMBAT", "📊 ANALYSE STATS", "📩 CONTACT & LIVES"
+])
 
-# --- ONGLET 1 : ACCUEIL ---
+# --- 6. ONGLET : ACCUEIL ---
 with tab_home:
-    st.markdown("<h2 style='text-align: center;'>VOS STATISTIQUES GLOBALES</h2>", unsafe_allow_html=True)
-    conn = get_db_connection()
-    df_stats = pd.read_sql_query("SELECT kd FROM performances", conn)
+    conn = get_connection()
+    df_count = pd.read_sql_query("SELECT COUNT(*) as total FROM performances", conn)
+    df_events = pd.read_sql_query("SELECT COUNT(*) as total FROM evenements", conn)
     
     col1, col2, col3 = st.columns(3)
-    with col1: st.metric("Soldats Identifiés", len(df_stats))
-    with col2: 
-        val = df_stats['kd'].mean() if not df_stats.empty else 0
-        st.metric("K/D Moyen Communauté", f"{val:.2f}")
-    with col3: st.metric("Serveur Status", "OPÉRATIONNEL ✅")
-
+    col1.metric("Soldats Recensés", df_count['total'][0])
+    col2.metric("Opérations Lancées", df_events['total'][0])
+    col3.metric("Status Serveur", "ONLINE", delta="Stable")
+    
     st.divider()
-    st.subheader("🏆 CLASSEMENT TOP GABON")
-    df_top = pd.read_sql_query("SELECT pseudo, MAX(kd) as kd FROM performances GROUP BY pseudo ORDER BY kd DESC LIMIT 5", conn)
-    st.dataframe(df_top, use_container_width=True)
+    
+    c_left, c_right = st.columns([2, 1])
+    with c_left:
+        st.subheader("📢 DERNIÈRES INFOS")
+        st.info("Le prochain tournoi majeur aura lieu le weekend prochain. Préparez vos teams !")
+        st.image("https://images.alphacoders.com/105/1050143.jpg", use_container_width=True)
+    with c_right:
+        st.subheader("🥇 TOP FRAGGEURS")
+        df_top = pd.read_sql_query("SELECT pseudo, MAX(kd) as Top_KD FROM performances GROUP BY pseudo ORDER BY Top_KD DESC LIMIT 5", conn)
+        if not df_top.empty:
+            st.table(df_top)
+        else:
+            st.write("Aucune donnée.")
     conn.close()
 
-# --- ONGLET 2 : COMPÉTITION & ORGANISATION (LE GROS MORCEAU) ---
+# --- 7. ONGLET : COMPÉTITION (ORGANISATION & SCRIMS) ---
 with tab_compete:
-    st.header("🏆 GESTION DES OPÉRATIONS")
+    col_menu, col_display = st.columns([1, 2])
     
-    # --- SUB-NAVIGATION ---
-    choice = st.radio("Menu", ["Explorer les Matchs", "Organiser un Événement", "Administration"], horizontal=True)
+    with col_menu:
+        st.subheader("🛠️ GESTION")
+        mode = st.radio("Action", ["Voir les Matchs", "Publier un Match/Tournoi"])
+        
+        if mode == "Publier un Match/Tournoi":
+            with st.form("new_event"):
+                org = st.text_input("Pseudo Organisateur")
+                type_e = st.selectbox("Catégorie", ["SCRIM AMICAL", "TOURNOI", "RANKED PUSH", "CHALLENGE"])
+                title = st.text_input("Nom de l'opération")
+                date_e = st.date_input("Date")
+                prize = st.text_input("Récompense (ex: 1000 CP)")
+                desc = st.text_area("Règles & Détails")
+                
+                if st.form_submit_button("LANCER L'APPEL AUX ARMES"):
+                    if org and title:
+                        conn = get_connection()
+                        conn.execute("INSERT INTO evenements (organisateur, type, titre, date, details, cashprize, status) VALUES (?,?,?,?,?,?,?)",
+                                     (org, type_e, title, str(date_e), desc, prize, "OUVERT"))
+                        conn.commit()
+                        conn.close()
+                        st.success("Annonce publiée sur l'Arena !")
+                    else:
+                        st.error("Remplis les champs obligatoires !")
 
-    if choice == "Organiser un Événement":
-        with st.form("create_event"):
-            st.subheader("➕ CRÉER UNE NOUVELLE OPÉRATION")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                pseudo_org = st.text_input("Pseudo Organisateur / Leader Team")
-                type_ev = st.selectbox("Type", ["TOURNOI", "SCRIM AMICAL", "RANKED PARTY", "RECRUTEMENT"])
-                titre = st.text_input("Nom de l'opération")
-            with col_b:
-                date_ev = st.date_input("Date")
-                cash = st.text_input("Récompense (ex: Gloire, 10€, 5000 CP)")
-                status = "OUVERT"
-            
-            details = st.text_area("Règles, Maps et Configuration")
-            submit = st.form_submit_button("PUBLIER SUR L'ARENA")
-            
-            if submit:
-                if pseudo_org and titre:
-                    conn = get_db_connection()
-                    conn.execute("INSERT INTO evenements (organisateur, type, titre, date, details, cashprize, status) VALUES (?,?,?,?,?,?,?)",
-                                 (pseudo_org, type_ev, titre, str(date_ev), details, cash, status))
-                    conn.commit()
-                    conn.close()
-                    st.success("✅ Opération publiée avec succès !")
-                else:
-                    st.error("❌ Erreur : Pseudo et Titre obligatoires.")
-
-    elif choice == "Explorer les Matchs":
-        conn = get_db_connection()
+    with col_display:
+        st.subheader("📅 OPÉRATIONS DISPONIBLES")
+        conn = get_connection()
+        # Sécurité : On s'assure que la table existe
+        conn.execute("CREATE TABLE IF NOT EXISTS evenements (id INTEGER PRIMARY KEY, organisateur TEXT, type TEXT, titre TEXT, date TEXT, details TEXT, cashprize TEXT, status TEXT)")
         df_ev = pd.read_sql_query("SELECT * FROM evenements WHERE status = 'OUVERT'", conn)
         
-        if df_ev.empty:
-            st.info("Aucune opération en cours. Lancez la vôtre !")
-        else:
+        if not df_ev.empty:
             for i, row in df_ev.iloc[::-1].iterrows():
-                with st.container():
-                    st.markdown(f"""
-                        <div style="background: #1A1A1A; padding: 20px; border-radius: 10px; border-left: 5px solid #FF4D00; margin-bottom: 20px;">
-                            <h3 style="margin:0;">{row['titre']} <span style="font-size:0.6em; color:#888;">({row['type']})</span></h3>
-                            <p style="color:#FF4D00;">📅 {row['date']} | 💰 {row['cashprize']}</p>
-                            <p style="color:#DDD;">{row['details']}</p>
-                            <p style="font-size:0.8em; color:#555;">Organisé par : {row['organisateur']}</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Formulaire d'inscription rapide
-                    with st.expander(f"📥 Rejoindre / S'inscrire à {row['titre']}"):
-                        with st.form(key=f"join_{row['id']}"):
-                            player = st.text_input("Pseudo du joueur / Nom de la Team")
-                            contact = st.text_input("Contact (Discord/WhatsApp)")
-                            if st.form_submit_button("VALIDER L'INSCRIPTION"):
-                                conn.execute("INSERT INTO inscriptions (event_id, participant, contact) VALUES (?,?,?)",
-                                             (row['id'], player, contact))
-                                conn.commit()
-                                st.success(f"Soldat {player} enregistré !")
+                st.markdown(f"""
+                <div class="event-card">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #FF4D00; font-weight: bold;">{row['type']}</span>
+                        <span style="color: #888;">{row['date']}</span>
+                    </div>
+                    <h2 style="margin: 10px 0; color: white !important;">{row['titre']}</h2>
+                    <p>{row['details']}</p>
+                    <div style="background: rgba(255, 77, 0, 0.1); padding: 10px; border-radius: 5px;">
+                        <span style="color: #FF4D00; font-weight: bold;">💰 PRIX : {row['cashprize']}</span> | 
+                        <span style="color: #EEE;">Par : {row['organisateur']}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                with st.expander(f"S'inscrire à {row['titre']}"):
+                    with st.form(key=f"insc_{row['id']}"):
+                        p_name = st.text_input("Pseudo / Nom de Team")
+                        p_cont = st.text_input("Discord ou WhatsApp")
+                        if st.form_submit_button("VALIDER L'INSCRIPTION"):
+                            conn.execute("INSERT INTO inscriptions VALUES (?,?,?,?)", 
+                                         (row['id'], p_name, p_cont, str(datetime.date.today())))
+                            conn.commit()
+                            st.success(f"Soldat {p_name} inscrit !")
+        else:
+            st.write("Aucun match prévu. Sois le premier à organiser !")
         conn.close()
 
-    elif choice == "Administration":
-        st.subheader("⚙️ GESTION ADMINISTRATIVE")
-        pwd = st.text_input("Code Admin", type="password")
-        if pwd == "DEMON": # Ton code secret
-            conn = get_db_connection()
-            st.write("### Liste des inscrits par événement")
-            df_inscr = pd.read_sql_query("""
-                SELECT evenements.titre, inscriptions.participant, inscriptions.contact 
-                FROM inscriptions 
-                JOIN evenements ON evenements.id = inscriptions.event_id
-            """, conn)
-            st.table(df_inscr)
-            
-            if st.button("🔴 RÉINITIALISER TOUTES LES DONNÉES"):
-                conn.execute("DELETE FROM evenements")
-                conn.execute("DELETE FROM inscriptions")
+# --- 8. ONGLET : ANALYSE STATS ---
+with tab_analyse:
+    st.header("📊 DOSSIER DU SOLDAT")
+    with st.form("stat_form"):
+        col_s1, col_s2 = st.columns(2)
+        p_name = col_s1.text_input("Ton Pseudo")
+        p_kd = col_s2.number_input("Ton K/D Ratio", min_value=0.0, step=0.01)
+        if st.form_submit_button("ENREGISTRER MES STATS"):
+            if p_name:
+                conn = get_connection()
+                conn.execute("INSERT INTO performances VALUES (?,?,?)", (p_name, p_kd, str(datetime.date.today())))
                 conn.commit()
-                st.warning("Zone nettoyée.")
-            conn.close()
-
-# --- ONGLET 3 : COMMUNAUTÉ ---
-with tab_media:
-    st.header("📺 QUARTIER GÉNÉRAL")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("📺 DERNIER BRIEFING (LIVE)")
-        st.video("https://youtu.be/8Oyl2sQE7JI?si=SgEaZcJwlHroRSRJ")
-    with col2:
-        st.subheader("🔗 RÉSEAUX SOCIAUX")
-        st.link_button("TIKTOK OFFICIEL", "https://www.tiktok.com/@lapoulefolle007")
-        st.info("Contactez l'admin pour devenir spectateur officiel.")
+                conn.close()
+                st.success("Stats sauvegardées !")
+            else:
+                st.error("Pseudo requis.")
 
     st.divider()
-    st.subheader("📩 CONTACT DIRECT")
-    c1, c2, c3 = st.columns(3)
-    c1.markdown("📧 **Email** : arsenemeye.mb@gmail.com")
-    c2.markdown("📱 **WhatsApp** : +33 7 66 88 61 72")
-    c3.link_button("LINKEDIN", "https://www.linkedin.com/in/arsène-mbabeh-meye-4823a9258")
+    
+    # Visualisation des performances
+    st.subheader("📈 ÉVOLUTION DE LA COMMUNAUTÉ")
+    conn = get_connection()
+    df_perf = pd.read_sql_query("SELECT * FROM performances", conn)
+    if not df_perf.empty:
+        st.line_chart(df_perf.set_index('date')['kd'])
+    else:
+        st.info("Pas assez de données pour le graphique.")
+    conn.close()
 
-    st.info("🚀 Développé par SK DEMON - Expert Python & SQL")
+# --- 9. ONGLET : CONTACT & MEDIA ---
+with tab_contact:
+    c_m1, c_m2 = st.columns(2)
+    with c_m1:
+        st.subheader("📺 LIVE STREAM")
+        st.video("https://youtu.be/8Oyl2sQE7JI?si=SgEaZcJwlHroRSRJ")
+    with c_m2:
+        st.subheader("🔗 RÉSEAUX")
+        st.link_button("TIKTOK", "https://www.tiktok.com/@lapoulefolle007")
+        st.link_button("LINKEDIN", "https://www.linkedin.com/in/arsène-mbabeh-meye-4823a9258")
+        st.info("Pour toute collaboration ou coaching : arsenemeye.mb@gmail.com")
+
+st.markdown("<p style='text-align: center; margin-top: 50px; color: #333;'>© 2026 CODM ARENA - TOUS DROITS RÉSERVÉS</p>", unsafe_allow_html=True)
