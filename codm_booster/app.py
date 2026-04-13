@@ -3,143 +3,189 @@ import random
 import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
-import sqlite3
+import os
+import json
 import plotly.graph_objects as go
+import sqlite3  # <--- Nouveau : pour la base de données
 
 # ----------------------
-# 1. CONFIGURATION & STYLE (NOIR & JAUNE)
-# ----------------------
-st.set_page_config(page_title="CODM Booster Pro", layout="centered")
-
-st.markdown("""
-    <style>
-        /* Fond principal noir */
-        .stApp {
-            background-color: #0d1117;
-            color: #ffffff;
-        }
-        /* Titres en jaune */
-        h1, h2, h3, p {
-            color: #facc15 !important;
-        }
-        /* Style des onglets */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 24px;
-        }
-        .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            white-space: pre-wrap;
-            background-color: #1e293b;
-            border-radius: 4px 4px 0px 0px;
-            color: white;
-            font-weight: bold;
-        }
-        .stTabs [aria-selected="true"] {
-            background-color: #facc15 !important;
-            color: black !important;
-        }
-        /* Bouton Jaune */
-        .stButton>button {
-            background-color: #facc15;
-            color: black;
-            font-weight: bold;
-            border-radius: 8px;
-            width: 100%;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# ----------------------
-# 2. BASE DE DONNÉES
+# Configuration de la Base de Données
 # ----------------------
 def init_db():
+    # Crée ou connecte le fichier de base de données
     conn = sqlite3.connect("codm_data.db", check_same_thread=False)
     c = conn.cursor()
+    # On crée une table unique pour stocker tout le monde
     c.execute('''CREATE TABLE IF NOT EXISTS performances 
                  (pseudo TEXT, kd REAL, winrate INTEGER, date TEXT)''')
     conn.commit()
     conn.close()
 
+# On lance l'initialisation dès le démarrage de l'app
 init_db()
 
-# (On garde tes fonctions analyser_performance, recommander_build et strategie_par_map ici...)
+# ----------------------
+# Fonctions d'analyse
+# ----------------------
 def analyser_performance(kd_ratio, win_rate):
-    if kd_ratio >= 3: niveau = "🔥 Légendaire (tu triches ou quoi ?)"
-    elif kd_ratio >= 2: niveau = "🥇 Très bon joueur"
-    elif kd_ratio >= 1: niveau = "🥉 Niveau correct (un peu guezz)"
-    else: niveau = "🛠 Besoin d'entraînement"
-    
+    if kd_ratio >= 3:
+        niveau = " ga tu prends tes balles? en tout cas"
+    elif kd_ratio >= 2:
+        niveau = " Très bon joueur"
+    elif kd_ratio >= 1:
+        niveau = " Ton niveau est correcte mais tu es guezz quand même "
+    else:
+        niveau = "Besoin d'entraînement"
+
+
     conseils = []
-    if win_rate < 50: conseils.append("Travaille ta com' d'équipe frère.")
-    if kd_ratio < 1: conseils.append("Change de sensibilité ou d'arme.")
+    if win_rate < 50:
+        conseils.append("Travaille ta communication en équipe frère c'est comment")
+    if kd_ratio < 1:
+        conseils.append("Teste d'autres armes plus stables vv")
     return niveau, conseils
 
+def recommander_build(arme):
+    equipements = {
+        "DL Q33": "Silencieux Monolithique, FMJ, Poignée granuleuse, Viseur Tactique, Munitions étendues",
+        "RPD": "Compensateur, Poignée lourde, Chargeur rapide, Laser OWC, Crosse tactique",
+        "AK117": "Frein de bouche, Viseur Red Dot, Poignée verticale, Chargeur étendu, Atout Agilité",
+        "Fennec": "Poignée .... , Laser tactique, Chargeur etendu A, Viseur point rouge",
+        "Kilo 141": "Canon RTC long, Viseur classique, Crosse stable, Chargeur rapide, Laser OWC",
+        "USS 9": "-----------------------------------------------",
+        "VMP": "--------------------------------------------------",
+        "Oden": "---------------------------------------------------",
+        "etc": "",
+
+    }
+    return equipements.get(arme, "Aucun build trouvé. Essaie une arme plus populaire ga arrete d'être guezz.")
+
+
+def strategie_par_map(mode, map_name):
+    strategies = {
+        "Multijoueur": {
+            "Nuketown": " En vrai c'est une map pour jouer SMJ. Reste mobile, surveille les angles morts, spawn trap conseillé.",
+            "Firing Range": " Utilise les angles. le sniper conseillé pour R&D sur les longues lignes oh, genre long A. Contrôle du middle essentiel également donc ne soit pas bête vv.",
+            "Summit": " Utilise le top et les passages latéraux. La carte est également mieux pour les SMJ et idéalement les pompes, mais si tu veux utilise la mélé mdr.",
+        },
+
+        "Battle Royale": {
+            "Black Market": " Je sais pas je joue pas br",
+            "Dormitory": " --- ",
+            "Launch Base": " ---- "
+        },
+    }
+    return strategies.get(mode, {}).get(map_name, " Carte inconnue ou stratégie non disponible.")
+
+
+
 # ----------------------
-# 3. INTERFACE PAR ONGLETS
+# Mon interface streamlit
 # ----------------------
-st.title("🪖 CODM BOOSTER PRO")
 
-tab1, tab2, tab3 = st.tabs(["📊 ANALYSE DU SKILL", "🔫 ARMURERIE & MAPS", "🏆 LEADERBOARD"])
+st.set_page_config(page_title="CODM Joueur Booster", layout="centered")
+st.markdown("""
 
-with tab1:
-    st.header("Ton Profil")
-    with st.form("stats_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            pseudo = st.text_input("Pseudo")
-            kd_ratio = st.number_input("K/D Ratio", min_value=0.0, step=0.1)
-        with col2:
-            win_rate = st.slider("Win Rate %", 0, 100, 50)
-            
-        st.write("---")
-        reflexes = st.slider("Réflexes", 1, 10, 5)
-        strategy = st.slider("Stratégie", 1, 10, 5)
-        mobility = st.slider("Mobilité", 1, 10, 5)
-        
-        submit = st.form_submit_button("LANCER L'ANALYSE")
+    <style>
+        .main {
+            background-color: #0d1117;
+            color: #f1f1f1;
+        }
+        h1, h2, h3, .stTextInput>div>div>input {
+            color: #facc15;
+        }
+        .stButton>button {
+            background-color: #facc15;
+            color: black;
+            border-radius: 8px;
+        }
 
-    if submit:
-        # Sauvegarde SQLite
-        conn = sqlite3.connect("codm_data.db")
-        c = conn.cursor()
-        c.execute("INSERT INTO performances VALUES (?, ?, ?, ?)", (pseudo, kd_ratio, win_rate, str(datetime.date.today())))
-        conn.commit()
-        conn.close()
+    </style>
 
-        # Résultats
-        niveau, conseils = analyser_performance(kd_ratio, win_rate)
-        st.subheader(f"Résultat : {niveau}")
-        for c in conseils:
-            st.warning(c)
+""", unsafe_allow_html=True)
 
-        # Radar Chart
-        categories = ['Réflexes', 'Stratégie', 'Mobilité']
-        values = [reflexes, strategy, mobility]
-        radar = go.Figure(data=go.Scatterpolar(r=values + [values[0]], theta=categories + [categories[0]], fill='toself', line=dict(color='#facc15')))
-        radar.update_layout(polar=dict(bgcolor="#1e1e1e"), paper_bgcolor="#0d1117", font_color="#facc15")
-        st.plotly_chart(radar)
+st.title("CODM - Booster vos performance (NB : je fais pas allusion au POUTOULOU voila)")
 
-with tab2:
-    st.header("Tactiques & Équipements")
-    arme = st.selectbox("Choisis ton arme", ["DL Q33", "RPD", "AK117", "Fennec", "Kilo 141"])
-    # Appelle ici ta fonction recommander_build(arme)
-    st.info(f"Build conseillé : [Ton code de build ici]")
+st.subheader("Analyse ton profil et reçois des conseils stratégiques ga !")
+
+with st.form("stats_form"):
+
+    pseudo = st.text_input("Ton pseudo CODM")
+
+    kd_ratio = st.number_input("Ton K/D Ratio", min_value=0.0, step=0.01)
+
+    win_rate = st.slider("Ton taux de victoire (%)", 0, 100, 50)
+
+    reflexes = st.slider("Réflexes (1-10)", 1, 10, 5)
+    strategy = st.slider("Stratégie (1-10)", 1, 10, 5)
+    mobility = st.slider("Mobilité (1-10)", 1, 10, 5)
+    arme_pref = st.text_input("Ton arme préférée ? (ex: DL Q33, RPD, AK117, Fennec, Kilo 141)")
+    mode_pref = st.selectbox("Ton mode préféré", ["Multijoueur", "Battle Royale", "Zombie"])
     
-    st.write("---")
-    map_name = st.selectbox("Carte", ["Nuketown", "Firing Range", "Summit"])
-    # Appelle ici ta fonction strategie_par_map("Multijoueur", map_name)
-    st.success(f"Stratégie : [Ton code de strat ici]")
-
-with tab3:
-    st.header("Classement Global")
-    conn = sqlite3.connect("codm_data.db")
-    df = pd.read_sql_query("SELECT pseudo, MAX(kd) as Meilleur_KD, winrate FROM performances GROUP BY pseudo ORDER BY kd DESC", conn)
-    conn.close()
-    
-    if not df.empty:
-        st.table(df)
-        # Petit bonus : moyenne du serveur
-        avg_kd = df['Meilleur_KD'].mean()
-        st.metric("Moyenne K/D du serveur", f"{avg_kd:.2f}")
+    if mode_pref == "Multijoueur":
+        map_pref = st.selectbox("Carte multijoueur", ["Nuketown", "Firing Range", "Summit", "Take Off", "Apocalyste", "Vacant", "Combine"])
+    elif mode_pref == "Battle Royale":
+        map_pref = st.selectbox("Zone de drop", ["Black Market", "Dormitory", "Launch Base"])
     else:
-        st.write("Aucune donnée pour le moment.")
+        map_pref = ""
+    submit = st.form_submit_button("Analyser mon profil")
+
+if submit:
+    niveau, conseils = analyser_performance(kd_ratio, win_rate)
+    st.success(f" Niveau estimé : {niveau}")
+    
+    if conseils:
+        st.info(" Conseils personnalisés :")
+        for c in conseils:
+            st.write("-", c)
+
+    st.divider()
+    st.subheader("🔧 Recommandation de build pour ton arme")
+    st.write(recommander_build(arme_pref))
+    st.divider()
+    st.subheader("Stratégie personnalisée selon ta carte")
+    st.write(strategie_par_map(mode_pref, map_pref))
+    st.divider()
+    st.subheader("Radar de Compétences")
+    categories = ['Réflexes', 'Stratégie', 'Mobilité']
+    values = [reflexes, strategy, mobility]
+    radar = go.Figure()
+    radar.add_trace(go.Scatterpolar(r=values + [values[0]],
+                                    theta=categories + [categories[0]],
+                                    fill='toself', name=pseudo))
+
+    radar.update_layout(polar=dict(bgcolor="#1e1e1e"),
+                        paper_bgcolor="#0d1117",
+                        font_color="#facc15",
+                        title="Carte Radar de Compétences")
+    st.plotly_chart(radar, use_container_width=True)
+
+    # Sauvegarde JSON pour suivi individuel
+    stats_file = f"stats_{pseudo}.json"
+
+    today = str(datetime.date.today())
+    data_point = {"date": today, "kd": kd_ratio, "winrate": win_rate}
+    if os.path.exists(stats_file):
+        with open(stats_file, 'r') as f:
+            historique = json.load(f)
+    else:
+        historique = []
+    historique.append(data_point)
+    with open(stats_file, 'w') as f:
+        json.dump(historique, f)
+
+    
+    # Graphe d'évolution K/D
+    st.divider()
+    st.subheader("Évolution de ton K/D dans le temps")
+    dates = [x["date"] for x in historique]
+    kds = [x["kd"] for x in historique]
+    plt.figure(figsize=(10, 4))
+    plt.plot(dates, kds, marker='o', linestyle='-', color='#facc15')
+    plt.xlabel("Date")
+    plt.ylabel("K/D Ratio")
+    plt.title(f"Progression de {pseudo}")
+    plt.xticks(rotation=45)
+    plt.grid(True)
+    st.pyplot(plt.gcf())
+    st.caption(f"Généré le {datetime.date.today()} • CODM Booster • Par Arsène le DEMON")
