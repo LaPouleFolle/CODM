@@ -181,7 +181,7 @@ with tab_home:
 with tab_analyse:
     st.header("🏆 Espace Compétition & Scrims")
 
-    # --- Analyse stat---
+    # --- Analyse---
     with st.expander("📊 Enregistrer mes stats (K/D uniquement)"):
         with st.form("stats_form"):
             pseudo = st.text_input("Ton pseudo CODM")
