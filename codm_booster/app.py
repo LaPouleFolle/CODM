@@ -17,8 +17,13 @@ st.set_page_config(page_title="CODM Joueur Booster", layout="centered")
 def init_db():
     conn = sqlite3.connect("codm_data.db", check_same_thread=False)
     c = conn.cursor()
+    # ma table de stat existante (à voir si je la garde)
     c.execute('''CREATE TABLE IF NOT EXISTS performances 
-                 (pseudo TEXT, kd REAL, winrate INTEGER, date TEXT)''')
+                 (pseudo TEXT, kd REAL, date TEXT)''') # winrate supprimé ici
+    
+    # Nouvelle table pour enregistré les scrims (Tournois/Scrims)
+    c.execute('''CREATE TABLE IF NOT EXISTS evenements 
+                 (organisateur TEXT, type TEXT, date_evenement TEXT, details TEXT)''')
     conn.commit()
     conn.close()
 
@@ -174,41 +179,104 @@ with tab_home:
     conn.close()
 # --- Onglet 2 : analyse 
 with tab_analyse:
-    st.header("Analyse ton Skill")
-    
-    with st.form("stats_form"):
-        pseudo = st.text_input("Ton pseudo CODM")
-        kd_ratio = st.number_input("Ton K/D Ratio", min_value=0.0, step=0.01)
-        win_rate = st.slider("Ton taux de victoire (%)", 0, 100, 50)
-        arme_pref = st.text_input("Ton arme préférée ?")
-        mode_pref = st.selectbox("Ton mode préféré", ["Multijoueur", "Battle Royale"])
-        
-        if mode_pref == "Multijoueur":
-            map_pref = st.selectbox("Carte", ["Nuketown", "Firing Range", "Summit"])
-        else:
-            map_pref = st.selectbox("Zone", ["Black Market"])
+    st.header("🏆 Espace Compétition & Scrims")
+
+    # --- Analyse stat---
+    with st.expander("📊 Enregistrer mes stats (K/D uniquement)"):
+        with st.form("stats_form"):
+            pseudo = st.text_input("Ton pseudo CODM")
+            kd_ratio = st.number_input("Ton K/D Ratio", min_value=0.0, step=0.01)
+            submit_stats = st.form_submit_button("Valider")
             
-        submit = st.form_submit_button("Analyser mon profil")
+            if submit_stats and pseudo.strip():
+                sauvegarder_stats_sql(pseudo, kd_ratio, 0) # On met 0 par défaut pour le winrate
+                st.success("Stats enregistrées !")
 
-    if submit:
-        if pseudo.strip(): 
-            sauvegarder_stats_sql(pseudo, kd_ratio, win_rate)
+    st.divider()
+
+    # --- organisation de tournoi? ---
+    col1, col2 = st.columns(2)
+
+# --- ONGLET 2 : ANALYSE & COMPÉTITION ---
+with tab_analyse:
+    st.header("🏆 Espace Compétition & Scrims")
+
+    # --- 1. LE FORMULAIRE D'ANALYSE (DANS UN EXPANDER) ---
+    with st.expander("📊 Enregistrer mes stats & Analyse rapide"):
+        with st.form("stats_form"):
+            pseudo = st.text_input("Ton pseudo CODM")
+            kd_ratio = st.number_input("Ton K/D Ratio", min_value=0.0, step=0.01)
+            # On garde les préférences ici pour l'analyse
+            mode_pref = st.selectbox("Ton mode préféré", ["Multijoueur", "Battle Royale"])
+            
+            if mode_pref == "Multijoueur":
+                map_pref = st.selectbox("Carte", ["Nuketown", "Firing Range", "Summit"])
+            else:
+                map_pref = st.selectbox("Zone", ["Black Market"])
+            
+            arme_pref = st.text_input("Ton arme préférée ?")
+            
+            submit = st.form_submit_button("Lancer l'analyse")
+
+        # LOGIQUE D'ANALYSE (Toujours dans l'expander pour plus de clarté)
+        if submit:
+            if pseudo.strip(): 
+                # Note: On envoie 0 pour le winrate puisque tu l'as supprimé
+                sauvegarder_stats_sql(pseudo, kd_ratio, 0)
+                
+                niveau, conseils = analyser_performance(kd_ratio, 0)
+                st.success(f"Niveau estimé : {niveau}")
+                for c in conseils:
+                    st.write("-", c)
+                
+                st.divider()
+                st.subheader("🔧 Build recommandé")
+                st.write(recommander_build(arme_pref))
+                
+                st.subheader("🗺️ Stratégie de carte")
+                st.write(strategie_par_map(mode_pref, map_pref))
+            else:
+                st.error("Mets un pseudo ga !")
+
+    st.divider()
+
+    # --- 2. LA PARTIE SCRIMS & TOURNOIS (EN DESSOUS) ---
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🔥 Organiser")
+        with st.popover("➕ Créer un événement"):
+            type_ev = st.selectbox("Type", ["Scrim (Match amical)", "Tournoi (Compétition)"])
+            date_ev = st.date_input("Date prévue")
+            details = st.text_area("Détails (Format, Map, Récompense...)")
+            
+            if st.button("Publier l'annonce"):
+                conn = sqlite3.connect("codm_data.db")
+                c = conn.cursor()
+                c.execute("INSERT INTO evenements VALUES (?, ?, ?, ?)", 
+                          (pseudo if pseudo.strip() else "Anonyme", type_ev, str(date_ev), details))
+                conn.commit()
+                conn.close()
+                st.success("Annonce publiée !")
+
+    with col2:
+        st.subheader("📅 Événements à venir")
+        conn = sqlite3.connect("codm_data.db")
+        # si ma table existe , je la lis
+        try:
+            ev_df = pd.read_sql_query("SELECT * FROM evenements", conn)
+        except:
+            ev_df = pd.DataFrame()
+        conn.close()
+
+        if not ev_df.empty:
+            for i, row in ev_df.iterrows():
+                with st.chat_message("user" if row['type'] == "Tournoi" else "assistant"):
+                    st.write(f"**{row['type']}** par *{row['organisateur']}*")
+                    st.write(f"📅 Date : {row['date_evenement']}")
+                    st.caption(row['details'])
         else:
-            st.error("Mets un pseudo ga !")
-            st.stop()
-
-        niveau, conseils = analyser_performance(kd_ratio, win_rate)
-        st.success(f"Niveau estimé : {niveau}")
-        
-        for c in conseils:
-            st.write("-", c)
-
-        st.divider()
-        st.subheader("🔧 Build recommandé")
-        st.write(recommander_build(arme_pref))
-        
-        st.subheader("🗺️ Stratégie de carte")
-        st.write(strategie_par_map(mode_pref, map_pref))
+            st.write("Aucun scrim prévu. Organise le tien !")
 
         # Gestion Historique JSON
         stats_file = f"stats_{pseudo}.json"
