@@ -238,7 +238,7 @@ with tab_media:
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("📺 Live")
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        st.video("https://youtu.be/8Oyl2sQE7JI?si=SgEaZcJwlHroRSRJ")
     with col2:
         st.subheader("🔗 Liens")
         st.link_button("Tiktok", "https://www.tiktok.com/@lapoulefolle007?is_from_webapp=1&sender_device=pc")
