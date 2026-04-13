@@ -180,73 +180,111 @@ with tab_home:
     
 # --- Onglet 2 : analyse 
 with tab_compete:
-    st.header("🏆 Arena & Performance")
+    st.header("🏆 Big Match")
     
-    mode_action = st.radio("Choisis ton action", ["Mon Analyse", "🔥 Scrims & Tournois", "⚙️ Administration"], horizontal=True)
+    # Menu de navigation interne
+    sub_menu = st.radio(
+        "Navigation", 
+        ["📊 Mon Analyse", "🔥 Scrims & Tournois", "📋 Suivi des Inscriptions"], 
+        horizontal=True
+    )
 
-    if mode_action == "Mon Analyse":
-        with st.form("stats_form"):
-            pseudo = st.text_input("Pseudo CODM")
-            kd_ratio = st.number_input("K/D Ratio", min_value=0.0, step=0.01)
-            win_rate = st.slider("Win Rate (%)", 0, 100, 50)
-            arme = st.text_input("Arme favorite")
-            submit = st.form_submit_button("Lancer l'Analyse")
+    st.divider()
 
-        if submit and pseudo:
-            sauvegarder_stats_sql(pseudo, kd_ratio, win_rate)
-            niv, cons = analyser_performance(kd_ratio, win_rate)
-            st.success(f"Niveau : {niv}")
-            st.write(recommander_build(arme))
+    # --- SECTION 1 : ANALYSE (Gardée simple) ---
+    if sub_menu == "📊 Mon Analyse":
+        col_form, col_info = st.columns([1, 1])
+        with col_form:
+            with st.form("stats_form"):
+                pseudo_stat = st.text_input("Pseudo IG")
+                kd_stat = st.number_input("K/D Ratio", min_value=0.0, step=0.01)
+                win_stat = st.slider("Win Rate (%)", 0, 100, 50)
+                if st.form_submit_button("ENREGISTRER MES PERFS"):
+                    if pseudo_stat:
+                        sauvegarder_stats_sql(pseudo_stat, kd_stat, win_stat)
+                        st.success(f"Stats de {pseudo_stat} mises à jour !")
+        with col_info:
+            st.info("💡 Enregistre tes stats régulièrement pour apparaître dans le Top Global de l'accueil.")
 
-    elif mode_action == "🔥 Scrims & Tournois":
-        col1, col2 = st.columns(2)
+    # --- SECTION 2 : CRÉATION DE SCRIMS & TOURNOIS ---
+    elif sub_menu == "🔥 Scrims & Tournois":
+        c1, c2 = st.columns([1, 1.2])
         
-        with col1:
+        with c1:
             st.subheader("📢 Créer une annonce")
-            with st.expander("Formulaire"):
-                with st.form("event_form"):
-                    org = st.text_input("Organisateur")
-                    t_ev = st.selectbox("Type", ["SCRIM", "TOURNOI", "RANKED PUSH"])
-                    titre = st.text_input("Titre de l'événement")
-                    cash = st.text_input("Récompense (ex: Gloire)")
-                    desc = st.text_area("Détails")
-                    if st.form_submit_button("Publier"):
-                        conn = sqlite3.connect("codm_data.db")
-                        conn.execute("INSERT INTO evenements (organisateur, type, titre, date, details, cashprize) VALUES (?,?,?,?,?,?)",
-                                     (org, t_ev, titre, str(datetime.date.today()), desc, cash))
-                        conn.commit()
-                        conn.close()
-                        st.success("Annonce en ligne !")
+            with st.form("event_form"):
+                org = st.text_input("Organisateur / Clan")
+                type_ev = st.selectbox("Type", ["SCRIM (Amical)", "TOURNOI (Cashprize)", "RANKED PUSH"])
+                titre = st.text_input("Nom de l'opération")
+                cash = st.text_input("Récompense")
+                desc = st.text_area("Détails")
+                if st.form_submit_button("PUBLIER"):
+                    conn = sqlite3.connect("codm_data.db")
+                    conn.execute("INSERT INTO evenements (organisateur, type, titre, date, details, cashprize) VALUES (?,?,?,?,?,?)",
+                                 (org, type_ev, titre, str(datetime.date.today()), desc, cash))
+                    conn.commit()
+                    conn.close()
+                    st.success("Annonce publiée !")
 
-        with col2:
-            st.subheader("📅 Liste des matchs")
+        with c2:
+            st.subheader("📅 Matchs Disponibles")
             conn = sqlite3.connect("codm_data.db")
-            # On force la création pour éviter le crash de table vide
+            # On s'assure que la table existe
             conn.execute("CREATE TABLE IF NOT EXISTS evenements (id INTEGER PRIMARY KEY AUTOINCREMENT, organisateur TEXT, type TEXT, titre TEXT, date TEXT, details TEXT, cashprize TEXT)")
             df_ev = pd.read_sql_query("SELECT * FROM evenements", conn)
-            
-            if not df_ev.empty:
-                for i, row in df_ev.iloc[::-1].iterrows():
-                    st.markdown(f"""<div class="event-card">
-                        <b>{row['type']} : {row['titre']}</b><br>
-                        <small>Par {row['organisateur']} | 💰 {row['cashprize']}</small><br>
-                        {row['details']}
-                    </div>""", unsafe_allow_html=True)
-                    if st.button(f"Rejoindre {row['id']}", key=f"btn_{row['id']}"):
-                        st.toast("Demande d'inscription envoyée !")
             conn.close()
 
-    elif mode_action == "⚙️ Administration":
-        pwd = st.text_input("Code Admin", type="password")
-        if pwd == "DEMON":
-            st.write("### Gestion de la base")
-            if st.button("🔴 RESET TOUT (Attention)"):
-                conn = sqlite3.connect("codm_data.db")
-                conn.execute("DELETE FROM evenements")
-                conn.execute("DELETE FROM performances")
-                conn.commit()
-                conn.close()
-                st.rerun()
+            if not df_ev.empty:
+                for i, row in df_ev.iloc[::-1].iterrows():
+                    st.markdown(f"""
+                        <div style="background-color: #1A1A1A; padding: 15px; border-radius: 10px; border-left: 5px solid #FF4D00; margin-bottom: 10px;">
+                            <h3 style="margin:0; color:#FF4D00 !important;">{row['titre']}</h3>
+                            <p style="margin:2px 0; font-size:0.9em;">{row['type']} | Par {row['organisateur']}</p>
+                            <p style="color:#BBB; font-size:0.8em;">{row['details']}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # FORMULAIRE D'INSCRIPTION
+                    with st.expander(f"S'inscrire à {row['titre']}"):
+                        with st.form(key=f"insc_{row['id']}"):
+                            p_name = st.text_input("Ton Pseudo / Team")
+                            p_cont = st.text_input("Contact (WhatsApp/Discord)")
+                            if st.form_submit_button("VALIDER"):
+                                conn = sqlite3.connect("codm_data.db")
+                                # Création table inscription si absente
+                                conn.execute("CREATE TABLE IF NOT EXISTS inscriptions (event_id INTEGER, participant TEXT, contact TEXT)")
+                                conn.execute("INSERT INTO inscriptions (event_id, participant, contact) VALUES (?,?,?)",
+                                             (row['id'], p_name, p_cont))
+                                conn.commit()
+                                conn.close()
+                                st.success("Inscription enregistrée ! Check l'onglet Suivi.")
+
+    # --- SECTION 3 : SUIVI DES INSCRIPTIONS (REMPlACE ADMIN) ---
+    elif sub_menu == "📋 Suivi des Inscriptions":
+        st.subheader("👀 Qui participe à quoi ?")
+        
+        conn = sqlite3.connect("codm_data.db")
+        # On vérifie si les tables existent pour éviter les crashs
+        check_insc = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='inscriptions'").fetchone()
+        
+        if check_insc:
+            # On fait une jointure SQL pour lier le nom du tournoi au participant
+            query = """
+                SELECT evenements.titre as 'Tournoi/Scrim', inscriptions.participant as 'Joueur/Team', inscriptions.contact as 'Contact'
+                FROM inscriptions
+                JOIN evenements ON evenements.id = inscriptions.event_id
+            """
+            df_suivi = pd.read_sql_query(query, conn)
+            conn.close()
+
+            if not df_suivi.empty:
+                st.dataframe(df_suivi, use_container_width=True)
+                st.info("ℹ️ Les organisateurs peuvent utiliser ces contacts pour créer les groupes de match.")
+            else:
+                st.write("Aucune inscription enregistrée pour le moment.")
+        else:
+            conn.close()
+            st.write("La zone est calme... Trop calme. Personne n'est encore inscrit.")
 
         # Gestion Historique JSON
         stats_file = f"stats_{pseudo}.json"
