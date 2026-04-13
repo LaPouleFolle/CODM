@@ -167,7 +167,7 @@ with tab_home:
     st.image("https://png.pngtree.com/background/20231101/original/pngtree-3d-illustration-of-blue-background-with-digital-binary-code-picture-image_5829125.jpg", use_container_width=True)
     st.info("💡 Conseil : Va dans l'onglet 'Analyse' pour enregistrer ton profil.")
 
-    st.subheader("🏆 Top Global Démon")
+    st.subheader("🏆 Top Global Gabon")
     conn = sqlite3.connect("codm_data.db")
     df_top = pd.read_sql_query("SELECT pseudo, MAX(kd) as kd FROM performances GROUP BY pseudo ORDER BY kd DESC LIMIT 5", conn)
     st.table(df_top)
