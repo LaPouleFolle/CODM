@@ -145,7 +145,7 @@ st.title("CODM BOOSTER PRO")
 # ----------------------
 # Création des onglets
 # ----------------------
-tab_home, tab_analyse, tab_media = st.tabs(["Accueil", "Analyse & Stats", "📺 Communauté & Live"])
+tab_home, tab_compete, tab_media = st.tabs(["Accueil", "Analyse & Stats", "📺 Communauté & Live"])
 
 # --- Onglet 1 : accueil ---
 with tab_home:
@@ -177,43 +177,76 @@ with tab_home:
     df_top = pd.read_sql_query("SELECT pseudo, MAX(kd) as kd FROM performances GROUP BY pseudo ORDER BY kd DESC LIMIT 5", conn)
     st.table(df_top)
     conn.close()
-# --- Onglet 2 : analyse 
-with tab_analyse:
-    st.header("Analyse ton Skill")
     
-    with st.form("stats_form"):
-        pseudo = st.text_input("Ton pseudo CODM")
-        kd_ratio = st.number_input("Ton K/D Ratio", min_value=0.0, step=0.01)
-        win_rate = st.slider("Ton taux de victoire (%)", 0, 100, 50)
-        arme_pref = st.text_input("Ton arme préférée ?")
-        mode_pref = st.selectbox("Ton mode préféré", ["Multijoueur", "Battle Royale"])
-        
-        if mode_pref == "Multijoueur":
-            map_pref = st.selectbox("Carte", ["Nuketown", "Firing Range", "Summit"])
-        else:
-            map_pref = st.selectbox("Zone", ["Black Market"])
-            
-        submit = st.form_submit_button("Analyser mon profil")
+# --- Onglet 2 : analyse 
+with tab_compete:
+    st.header("🏆 Arena & Performance")
+    
+    mode_action = st.radio("Choisis ton action", ["Mon Analyse", "🔥 Scrims & Tournois", "⚙️ Administration"], horizontal=True)
 
-    if submit:
-        if pseudo.strip(): 
+    if mode_action == "Mon Analyse":
+        with st.form("stats_form"):
+            pseudo = st.text_input("Pseudo CODM")
+            kd_ratio = st.number_input("K/D Ratio", min_value=0.0, step=0.01)
+            win_rate = st.slider("Win Rate (%)", 0, 100, 50)
+            arme = st.text_input("Arme favorite")
+            submit = st.form_submit_button("Lancer l'Analyse")
+
+        if submit and pseudo:
             sauvegarder_stats_sql(pseudo, kd_ratio, win_rate)
-        else:
-            st.error("Mets un pseudo ga !")
-            st.stop()
+            niv, cons = analyser_performance(kd_ratio, win_rate)
+            st.success(f"Niveau : {niv}")
+            st.write(recommander_build(arme))
 
-        niveau, conseils = analyser_performance(kd_ratio, win_rate)
-        st.success(f"Niveau estimé : {niveau}")
+    elif mode_action == "🔥 Scrims & Tournois":
+        col1, col2 = st.columns(2)
         
-        for c in conseils:
-            st.write("-", c)
+        with col1:
+            st.subheader("📢 Créer une annonce")
+            with st.expander("Formulaire"):
+                with st.form("event_form"):
+                    org = st.text_input("Organisateur")
+                    t_ev = st.selectbox("Type", ["SCRIM", "TOURNOI", "RANKED PUSH"])
+                    titre = st.text_input("Titre de l'événement")
+                    cash = st.text_input("Récompense (ex: Gloire)")
+                    desc = st.text_area("Détails")
+                    if st.form_submit_button("Publier"):
+                        conn = sqlite3.connect("codm_data.db")
+                        conn.execute("INSERT INTO evenements (organisateur, type, titre, date, details, cashprize) VALUES (?,?,?,?,?,?)",
+                                     (org, t_ev, titre, str(datetime.date.today()), desc, cash))
+                        conn.commit()
+                        conn.close()
+                        st.success("Annonce en ligne !")
 
-        st.divider()
-        st.subheader("🔧 Build recommandé")
-        st.write(recommander_build(arme_pref))
-        
-        st.subheader("🗺️ Stratégie de carte")
-        st.write(strategie_par_map(mode_pref, map_pref))
+        with col2:
+            st.subheader("📅 Liste des matchs")
+            conn = sqlite3.connect("codm_data.db")
+            # On force la création pour éviter le crash de table vide
+            conn.execute("CREATE TABLE IF NOT EXISTS evenements (id INTEGER PRIMARY KEY AUTOINCREMENT, organisateur TEXT, type TEXT, titre TEXT, date TEXT, details TEXT, cashprize TEXT)")
+            df_ev = pd.read_sql_query("SELECT * FROM evenements", conn)
+            
+            if not df_ev.empty:
+                for i, row in df_ev.iloc[::-1].iterrows():
+                    st.markdown(f"""<div class="event-card">
+                        <b>{row['type']} : {row['titre']}</b><br>
+                        <small>Par {row['organisateur']} | 💰 {row['cashprize']}</small><br>
+                        {row['details']}
+                    </div>""", unsafe_allow_html=True)
+                    if st.button(f"Rejoindre {row['id']}", key=f"btn_{row['id']}"):
+                        st.toast("Demande d'inscription envoyée !")
+            conn.close()
+
+    elif mode_action == "⚙️ Administration":
+        pwd = st.text_input("Code Admin", type="password")
+        if pwd == "DEMON":
+            st.write("### Gestion de la base")
+            if st.button("🔴 RESET TOUT (Attention)"):
+                conn = sqlite3.connect("codm_data.db")
+                conn.execute("DELETE FROM evenements")
+                conn.execute("DELETE FROM performances")
+                conn.commit()
+                conn.close()
+                st.rerun()
 
         # Gestion Historique JSON
         stats_file = f"stats_{pseudo}.json"
