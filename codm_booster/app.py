@@ -1,4 +1,4 @@
-import streamlit as st
+iimport streamlit as st
 import random
 import datetime
 import pandas as pd
@@ -6,6 +6,23 @@ import matplotlib.pyplot as plt
 import os
 import json
 import plotly.graph_objects as go
+import sqlite3  # <--- pour ma base de données, afin de stocker les utilisateurs
+
+# ----------------------
+# Configuration de la Base de Données
+# ----------------------
+def init_db():
+    # Crée ou connecte le fichier de base de données
+    conn = sqlite3.connect("codm_data.db", check_same_thread=False)
+    c = conn.cursor()
+    # On crée une table unique pour stocker tout le monde
+    c.execute('''CREATE TABLE IF NOT EXISTS performances 
+                 (pseudo TEXT, kd REAL, winrate INTEGER, date TEXT)''')
+    conn.commit()
+    conn.close()
+
+# On lance l'initialisation dès le démarrage de l'app
+init_db()
 
 # ----------------------
 # Fonctions d'analyse
