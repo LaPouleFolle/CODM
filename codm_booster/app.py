@@ -242,4 +242,27 @@ with tab_media:
     with col2:
         st.subheader("🔗 Liens")
         st.link_button("Tiktok", "https://www.tiktok.com/@lapoulefolle007?is_from_webapp=1&sender_device=pc")
-        st.info("Ton annonce ici ! Contacte Arsène.")
+        st.info("Pour tout besoin de spec sur les lives , me contacter")
+
+    st.divider()
+    
+    # Tout ce qui suit doit être aligné ici pour rester dans l'onglet
+    st.subheader("Contact & Collaborations")
+
+    # Création de 3 colonnes
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        st.markdown("### Email")
+        st.write("arsenemeye.mb@gmail.com")
+
+    with c2:
+        st.markdown("### Téléphone")
+        st.write("+33 7 66 88 61 72")
+
+    with c3:
+        st.markdown("### 🔗 LinkedIn")
+        st.link_button("Voir mon profil", "www.linkedin.com/in/arsène-mbabeh-meye-4823a9258")
+
+    # Petit bandeau de fin (aligné avec c1, c2, c3)
+    st.info("Disponible pour du coaching CODM ou des projets de développement Python ou Base de donnée SQL.")
