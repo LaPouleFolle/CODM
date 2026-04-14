@@ -64,8 +64,8 @@ def get_db_connection():
 # Initialisation
 conn = get_db_connection()
 
-# 4. TITRE
-st.markdown("<h1 style='text-align: center; font-size: 3.5em;'>🎮 CODM ARENA COMMAND</h1>", unsafe_allow_html=True)
+# 4. titre de page
+st.markdown("<h1 style='text-align: center; font-size: 3.5em;'>🎮 CODM - ORGANISATION</h1>", unsafe_allow_html=True)
 
 # 5. NAVIGATION PAR ONGLETS (On garde tes 3 onglets !)
 tab_home, tab_arena, tab_media = st.tabs(["🏠 ACCUEIL", "🏆 ARENA (DRAFT 10J)", "📺 COMMUNAUTÉ & CONTACT"])
@@ -159,7 +159,7 @@ with tab_arena:
                     else:
                         st.warning("Pseudo et Contact obligatoires !")
         conn.close()
-        
+
     # SECTION : SUIVI & TEAMS (AUTOMATIQUE)
     elif choix == "Suivi & Teams":
         df_ev = pd.read_sql_query("SELECT * FROM evenements", conn)
@@ -202,6 +202,6 @@ with tab_media:
     c2.markdown(f"**Téléphone :** +33 7 66 88 61 72")
     c3.link_button("LinkedIn", "https://www.linkedin.com/in/arsène-mbabeh-meye-4823a9258")
     
-    st.info("🚀 Disponible pour du coaching CODM ou des projets Python/SQL.")
+    st.info("🚀 Disponible pour des projets en Python/SQL.")
 
 conn.close()
