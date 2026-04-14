@@ -76,7 +76,7 @@ with tab_home:
         st.subheader("Briefing de Mission")
         st.write("Bienvenue sur la plateforme **CODM Booster**. Ici, on ne rigole pas avec le skill.")
         st.write("Utilise l'onglet **ARENA** pour lancer des matchs ou rejoindre un lobby de 10 joueurs.")
-        st.image("https://images.alphacoders.com/105/1050143.jpg", use_container_width=True)
+        st.image("https://i.pinimg.com/originals/05/90/ab/0590abeb7e74f434902def84fef8dff3.jpg", use_container_width=True)
     with col2:
         st.info("💡 Le système de Draft mélange automatiquement les inscrits pour créer des teams équilibrées dès que le quota de 10 joueurs est atteint.")
 
