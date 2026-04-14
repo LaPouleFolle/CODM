@@ -114,7 +114,10 @@ with tab_arena:
 
     # SECTION : INSCRIPTION
     elif choix == "📝 Rejoindre":
+        # On s'assure que la table evenements est lisible
+        conn.execute("CREATE TABLE IF NOT EXISTS evenements (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, leader TEXT, titre TEXT, maps TEXT, modes TEXT, date TEXT)")
         df_ev = pd.read_sql_query("SELECT * FROM evenements", conn)
+        
         if df_ev.empty:
             st.warning("Aucun lobby ouvert.")
         else:
@@ -123,8 +126,9 @@ with tab_arena:
                 pseudo = st.text_input("Ton Pseudo IG")
                 contact = st.text_input("Contact (WA/Discord)")
                 
-                # Choix de l'équipe selon le type
+                # Récupération sécurisée du type
                 current_type = df_ev[df_ev['id'] == sid]['type'].values[0]
+                
                 if current_type == "Scrim":
                     team = st.radio("Choisis ta Team (Max 5 par team)", ["Team Alpha", "Team Bravo"])
                 elif current_type == "Tournoi":
@@ -133,12 +137,19 @@ with tab_arena:
                     team = "Ranked Squad"
 
                 if st.form_submit_button("REJOINDRE"):
-                    # Vérification limite
+                    # --- FIX ICI : On crée la table inscriptions AVANT de faire le SELECT ---
+                    conn.execute('''CREATE TABLE IF NOT EXISTS inscriptions 
+                                 (event_id INTEGER, pseudo TEXT, contact TEXT, team_name TEXT, score INTEGER DEFAULT 0)''')
+                    conn.commit()
+                    
+                    # Maintenant le SELECT ne peut plus crash
                     check_limit = pd.read_sql_query("SELECT * FROM inscriptions WHERE event_id = ?", conn, params=(int(sid),))
+                    
                     limit = 5 if current_type == "Ranked" else (10 if current_type == "Scrim" else 100)
                     
                     if len(check_limit) < limit:
-                        conn.execute("INSERT INTO inscriptions (event_id, pseudo, contact, team_name) VALUES (?,?,?,?)", (int(sid), pseudo, contact, team))
+                        conn.execute("INSERT INTO inscriptions (event_id, pseudo, contact, team_name) VALUES (?,?,?,?)", 
+                                     (int(sid), pseudo, contact, team))
                         conn.commit()
                         st.success("Soldat enregistré !")
                     else:
@@ -166,7 +177,7 @@ with tab_arena:
                     else:
                         st.dataframe(df_p, use_container_width=True)
                 st.divider()
-                
+
 # --- ONGLET 3 : COMMUNAUTÉ & CONTACT (TES INFOS) ---
 with tab_media:
     st.header("Espace Communauté")
