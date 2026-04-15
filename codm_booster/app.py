@@ -236,32 +236,44 @@ with tab_arena:
                                 """, unsafe_allow_html=True)
 
                         # --- LE DASHBOARD DE MATCH ---
-                                    
-                        st.subheader(" SCORE LIVE (BO3 - Premier à 2 victoires)")
-
-                        sc_col1, sc_col2 = st.columns(2)
-                        # On limite à 2 car en BO3, le premier à 2 gagne la série
-                        s1 = sc_col1.number_input(f"Manches {teams[0]}", min_value=0, max_value=2, key=f"s1_{ev['id']}")
-                        s2 = sc_col2.number_input(f"Manches {teams[1]}", min_value=0, max_value=2, key=f"s2_{ev['id']}")
-
-                        # Empêcher l'égalité impossible en fin de BO3
-                        if s1 == 2 and s2 == 2:
-                            st.error("Impossible : En BO3, il ne peut pas y avoir 2-2 !")
+                        st.divider()
+                        
+                        # SÉCURITÉ : On vérifie qu'il y a bien 2 équipes avant d'afficher le score
+                        if len(teams) < 2:
+                            st.warning("⏳ En attente d'une équipe adverse pour activer le score...")
                         else:
-                            mvp = st.selectbox("Sélectionner le MVP du match", ["---"] + list(df_p['pseudo']), key=f"mvp_{ev['id']}")
-                            
-                            if (s1 == 2 or s2 == 2) and mvp != "---":
-                                if st.button("🏆 ENREGISTRER LE RÉSULTAT FINAL", key=f"fin_{ev['id']}"):
-                                    gagnant = teams[0] if s1 > s2 else teams[1]
-                                    # Sauvegarde en base de données (on ajoute le score et le MVP)
-                                    conn.execute("UPDATE evenements SET titre = ? WHERE id = ?", (f"FINI: {ev['titre']}", ev['id']))
-                                    for p in df_p['pseudo']:
-                                        points = 10 if p == mvp else (5 if p in df_p[df_p['team_name']==gagnant]['pseudo'].values else 0)
-                                        conn.execute("UPDATE inscriptions SET score = score + ? WHERE pseudo = ? AND event_id = ?", (points, p, ev['id']))
-                                    conn.commit()
-                                    st.balloons()
-                                    st.success(f"Match terminé ! Victoire de {gagnant}. MVP: {mvp}")             
+                            st.subheader("🕹️ SCORE LIVE (BO3 - Premier à 2 victoires)")
 
+                            sc_col1, sc_col2 = st.columns(2)
+                            # On affiche les scores seulement si on a bien teams[0] et teams[1]
+                            s1 = sc_col1.number_input(f"Manches {teams[0]}", min_value=0, max_value=2, key=f"s1_{ev['id']}")
+                            s2 = sc_col2.number_input(f"Manches {teams[1]}", min_value=0, max_value=2, key=f"s2_{ev['id']}")
+
+                            # Empêcher l'égalité 2-2 en BO3
+                            if s1 == 2 and s2 == 2:
+                                st.error("Impossible : En BO3, il ne peut pas y avoir 2-2 !")
+                            else:
+                                mvp = st.selectbox("Sélectionner le MVP du match", ["---"] + list(df_p['pseudo']), key=f"mvp_{ev['id']}")
+                                
+                                # Le bouton n'apparaît que si une équipe a gagné (score de 2)
+                                if (s1 == 2 or s2 == 2) and mvp != "---":
+                                    if st.button("🏆 ENREGISTRER LE RÉSULTAT FINAL", key=f"fin_{ev['id']}"):
+                                        gagnant = teams[0] if s1 > s2 else teams[1]
+                                        
+                                        # Mise à jour du titre pour marquer comme fini
+                                        conn.execute("UPDATE evenements SET titre = ? WHERE id = ?", (f"✅ FINI: {ev['titre']}", ev['id']))
+                                        
+                                        # Distribution des points
+                                        for _, row_p in df_p.iterrows():
+                                            p_pts = 10 if row_p['pseudo'] == mvp else (5 if row_p['team_name'] == gagnant else 0)
+                                            conn.execute("UPDATE inscriptions SET score = score + ? WHERE pseudo = ? AND event_id = ?", 
+                                                         (p_pts, row_p['pseudo'], ev['id']))
+                                        
+                                        conn.commit()
+                                        st.balloons()
+                                        st.success(f"Victoire de {gagnant} ! MVP: {mvp}")
+                                        st.rerun()           
+                        
 # --- ONGLET 3 : COMMUNAUTÉ & CONTACT (TES INFOS) ---
 with tab_media:
     st.header("Espace Communauté")
@@ -281,7 +293,7 @@ with tab_media:
     c2.markdown(f"**Téléphone :** +33 7 66 88 61 72")
     c3.link_button("LinkedIn", "https://www.linkedin.com/in/arsène-mbabeh-meye-4823a9258")
     
-    st.info("🚀 Disponible pour des projets en Python/SQL.")
+    st.info("Disponible pour des projets en Python/SQL.")
 
 # --- ONGLET : CLASSEMENT ---
 with tab_rank:
