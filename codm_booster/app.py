@@ -113,33 +113,97 @@ with tab_arena:
 
     # SECTION : INSCRIPTION
     elif choix == "📝 Rejoindre":
-        # 1. On récupère la liste des lobby existants
+        # 1. RÉCUPÉRATION DES LOBBYS ACTIFS
         df_ev = pd.read_sql_query("SELECT id, titre, type FROM evenements", conn)
         
         if df_ev.empty:
             st.warning("⚠️ Aucun lobby n'est ouvert pour le moment. Créez-en un !")
         else:
-            # Création d'une liste propre pour le menu déroulant
-            liste_lobby = {row['id']: f"[{row['type']}] {row['titre']}" for _, row in df_ev.iterrows()}
+            # On crée un dictionnaire pour afficher des noms clairs dans la liste déroulante
+            liste_lobby = {row['id']: f"[{row['type'].upper()}] {row['titre']}" for _, row in df_ev.iterrows()}
             
-            with st.form("form_join"):
-                selected_id = st.selectbox("Sélectionne ton Match", options=list(liste_lobby.keys()), format_func=lambda x: liste_lobby[x])
-                pseudo = st.text_input("Ton Pseudo IG")
+            with st.form("form_join_complet"):
+                st.subheader("Fiche d'enrôlement")
                 
-                # Nom de team dynamique : l'utilisateur écrit ce qu'il veut
-                team_name = st.text_input("Nom de ton Équipe (ex: Team Demon, Alpha, Squad 7...)")
+                selected_id = st.selectbox(
+                    "Sélectionne ton Match", 
+                    options=list(liste_lobby.keys()), 
+                    format_func=lambda x: liste_lobby[x]
+                )
                 
-                submit = st.form_submit_button("REJOINDRE LE COMBAT")
+                pseudo = st.text_input("Ton Pseudo", placeholder="Ex: SK_DEMON")
+                
+                # Le nom de team est libre, mais on va le mettre en majuscule pour éviter les doublons
+                team_input = st.text_input("Nom de ton Équipe", placeholder="Ex: Serial Killer, Licteur, le reste vv...")
+                
+                submit = st.form_submit_button("VALIDER L'INSCRIPTION")
                 
                 if submit:
-                    if pseudo and team_name:
-                        conn.execute("INSERT INTO inscriptions (event_id, pseudo, team_name) VALUES (?,?,?)", 
-                                     (int(selected_id), pseudo, team_name))
-                        conn.commit()
-                        st.success(f"Soldat {pseudo} a rejoint la {team_name} !")
-                        st.rerun() # Rafraîchit pour voir la liste direct
+                    if pseudo and team_input:
+                        # Nettoyage du nom de team (tout en majuscules pour la cohérence)
+                        team_name = team_input.strip().upper()
+                        
+                        # --- DÉBUT DE LA VÉRIFICATION DES LIMITES ---
+                        # On récupère les inscrits actuels pour ce lobby précis
+                        df_check = pd.read_sql_query(
+                            "SELECT pseudo, team_name FROM inscriptions WHERE event_id = ?", 
+                            conn, params=(int(selected_id),)
+                        )
+                        
+                        # On récupère le type de l'événement sélectionné
+                        current_type = df_ev[df_ev['id'] == selected_id]['type'].values[0]
+                        
+                        autorise = False
+                        msg_erreur = ""
+
+                        # --- LOGIQUE : SCRIM (2 teams max, 6 joueurs max par team) ---
+                        if current_type == "Scrim":
+                            teams_actuelles = df_check['team_name'].unique()
+                            joueurs_ma_team = len(df_check[df_check['team_name'] == team_name])
+                            
+                            if len(teams_actuelles) >= 2 and team_name not in teams_actuelles:
+                                msg_erreur = "Lobby Scrim complet (Déjà 2 équipes inscrites)."
+                            elif joueurs_ma_team >= 6:
+                                msg_erreur = f"La {team_name} est complète (Max 6 joueurs avec remplaçant)."
+                            else:
+                                autorise = True
+
+                        # --- LOGIQUE : TOURNOI (20 teams max, 8 joueurs max par team) ---
+                        elif current_type == "Tournoi":
+                            teams_actuelles = df_check['team_name'].unique()
+                            joueurs_ma_team = len(df_check[df_check['team_name'] == team_name])
+                            
+                            if len(teams_actuelles) >= 20 and team_name not in teams_actuelles:
+                                msg_erreur = "Tournoi complet (Limite de 20 équipes atteinte)."
+                            elif joueurs_ma_team >= 8:
+                                msg_erreur = f"L'équipe {team_name} est complète (Max 8 joueurs)."
+                            else:
+                                autorise = True
+
+                        # --- LOGIQUE : RANKED (5 joueurs max au total) ---
+                        elif current_type == "Ranked":
+                            if len(df_check) >= 5:
+                                msg_erreur = "Squad Ranked complète (Max 5 joueurs)."
+                            else:
+                                autorise = True
+
+                        # --- ACTION FINALE ---
+                        if autorise:
+                            # On vérifie si le pseudo n'est pas déjà inscrit dans ce lobby
+                            if pseudo.lower() in [p.lower() for p in df_check['pseudo'].tolist()]:
+                                st.error(f"🛑 Soldat {pseudo}, tu es déjà sur la liste !")
+                            else:
+                                conn.execute(
+                                    "INSERT INTO inscriptions (event_id, pseudo, team_name) VALUES (?,?,?)", 
+                                    (int(selected_id), pseudo, team_name)
+                                )
+                                conn.commit()
+                                st.success(f"✅ Déploiement confirmé : {pseudo} rejoint la {team_name} !")
+                                st.rerun()
+                        else:
+                            st.error(f"❌ Accès refusé : {msg_erreur}")
                     else:
-                        st.error("Pseudo et Nom d'équipe obligatoires !")
+                        st.warning("⚠️ Soldat, remplis ton pseudo et le nom de ton équipe !")
 
     # SECTION : SUIVI & TEAMS (AUTOMATIQUE)
     elif choix == "📊 Suivi & Teams":
