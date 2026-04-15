@@ -51,13 +51,12 @@ st.markdown("""
 # 3. LOGIQUE BASE DE DONNÉES 
 def get_db_connection():
     conn = sqlite3.connect("codm_data.db", check_same_thread=False)
-    # ma Table des événements (ajout de type, maps, modes)
+    # Table des lobby
     conn.execute('''CREATE TABLE IF NOT EXISTS evenements 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, leader TEXT, titre TEXT, 
-                  maps TEXT, modes TEXT, date TEXT)''')
-    #la tab des inscriptions (ajout de team_name et score)
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, leader TEXT, titre TEXT, maps TEXT, modes TEXT)''')
+    # Table des joueurs (avec team_name saisi par l'user)
     conn.execute('''CREATE TABLE IF NOT EXISTS inscriptions 
-                 (event_id INTEGER, pseudo TEXT, contact TEXT, team_name TEXT, score INTEGER DEFAULT 0)''')
+                 (event_id INTEGER, pseudo TEXT, team_name TEXT)''')
     conn.commit()
     return conn
 
@@ -68,7 +67,7 @@ conn = get_db_connection()
 st.markdown("<h1 style='text-align: center; font-size: 3.5em;'>🎮 CODM - ORGANISATION</h1>", unsafe_allow_html=True)
 
 # 5. NAVIGATION PAR ONGLETS (On garde tes 3 onglets !)
-tab_home, tab_arena, tab_media = st.tabs(["🏠 ACCUEIL", "🏆 ARENA (DRAFT 10J)", "📺 COMMUNAUTÉ & CONTACT"])
+tab_home, tab_arena, tab_media = st.tabs([" ACCUEIL", " ARENA (DRAFT 10J)", " COMMUNAUTÉ & CONTACT"])
 
 # --- ONGLET 1 : ACCUEIL ---
 with tab_home:
@@ -114,75 +113,66 @@ with tab_arena:
 
     # SECTION : INSCRIPTION
     elif choix == "📝 Rejoindre":
-        conn = get_db_connection()
-        # On force la création des tables avant toute lecture pour Pandas
-        conn.execute('''CREATE TABLE IF NOT EXISTS evenements 
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, leader TEXT, titre TEXT, maps TEXT, modes TEXT, date TEXT)''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS inscriptions 
-                     (event_id INTEGER, pseudo TEXT, contact TEXT, team_name TEXT, score INTEGER DEFAULT 0)''')
-        conn.commit()
+        # 1. On récupère la liste des lobby existants
+        df_ev = pd.read_sql_query("SELECT id, titre, type FROM evenements", conn)
+        
+        if df_ev.empty:
+            st.warning("⚠️ Aucun lobby n'est ouvert pour le moment. Créez-en un !")
+        else:
+            # Création d'une liste propre pour le menu déroulant
+            liste_lobby = {row['id']: f"[{row['type']}] {row['titre']}" for _, row in df_ev.iterrows()}
+            
+            with st.form("form_join"):
+                selected_id = st.selectbox("Sélectionne ton Match", options=list(liste_lobby.keys()), format_func=lambda x: liste_lobby[x])
+                pseudo = st.text_input("Ton Pseudo IG")
+                
+                # Nom de team dynamique : l'utilisateur écrit ce qu'il veut
+                team_name = st.text_input("Nom de ton Équipe (ex: Team Demon, Alpha, Squad 7...)")
+                
+                submit = st.form_submit_button("REJOINDRE LE COMBAT")
+                
+                if submit:
+                    if pseudo and team_name:
+                        conn.execute("INSERT INTO inscriptions (event_id, pseudo, team_name) VALUES (?,?,?)", 
+                                     (int(selected_id), pseudo, team_name))
+                        conn.commit()
+                        st.success(f"Soldat {pseudo} a rejoint la {team_name} !")
+                        st.rerun() # Rafraîchit pour voir la liste direct
+                    else:
+                        st.error("Pseudo et Nom d'équipe obligatoires !")
 
+    # SECTION : SUIVI & TEAMS (AUTOMATIQUE)
+    elif choix == "📊 Suivi & Teams":
         df_ev = pd.read_sql_query("SELECT * FROM evenements", conn)
         
         if df_ev.empty:
-            st.warning("Aucun lobby ouvert.")
-        else:
-            with st.form("form_join"):
-                sid = st.selectbox("Match", df_ev['id'], format_func=lambda x: f"{df_ev[df_ev['id']==x]['titre'].values[0]}")
-                pseudo = st.text_input("Ton Pseudo IG")
-                contact = st.text_input("Contact (WA/Discord)")
-                
-                current_type = df_ev[df_ev['id'] == sid]['type'].values[0]
-                
-                if current_type == "Scrim":
-                    team = st.radio("Choisis ta Team (Max 5 par team)", ["Team Alpha", "Team Bravo"])
-                elif current_type == "Tournoi":
-                    team = st.text_input("Nom de ton Équipe")
-                else:
-                    team = "Ranked Squad"
-
-                if st.form_submit_button("REJOINDRE"):
-                    if pseudo and contact:
-                        # Lecture sécurisée du nombre d'inscrits
-                        check_limit = pd.read_sql_query("SELECT * FROM inscriptions WHERE event_id = ?", conn, params=(int(sid),))
-                        
-                        limit = 5 if current_type == "Ranked" else (10 if current_type == "Scrim" else 100)
-                        
-                        if len(check_limit) < limit:
-                            conn.execute("INSERT INTO inscriptions (event_id, pseudo, contact, team_name) VALUES (?,?,?,?)", 
-                                         (int(sid), pseudo, contact, team))
-                            conn.commit()
-                            st.success(f"Soldat {pseudo} enregistré avec succès !")
-                            st.rerun()
-                        else:
-                            st.error("Lobby complet !")
-                    else:
-                        st.warning("Pseudo et Contact obligatoires !")
-        conn.close()
-
-    # SECTION : SUIVI & TEAMS (AUTOMATIQUE)
-    elif choix == "Suivi & Teams":
-        df_ev = pd.read_sql_query("SELECT * FROM evenements", conn)
-        if df_ev.empty:
-            st.write("Aucun match en cours.")
+            st.info("Aucune donnée disponible.")
         else:
             for _, ev in df_ev.iloc[::-1].iterrows():
-                with st.expander(f" {ev['type']} : {ev['titre']}"):
-                    st.write(f" Maps: **{ev['maps']}** | 🎮 Modes: **{ev['modes']}**")
-                    df_p = pd.read_sql_query("SELECT pseudo, team_name, contact FROM inscriptions WHERE event_id = ?", conn, params=(ev['id'],))
+                with st.expander(f"📋 {ev['type']} : {ev['titre']}"):
+                    st.write(f"📍 Maps: {ev['maps']} | 🎮 Modes: {ev['modes']}")
                     
-                    if ev['type'] == "Scrim":
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            st.markdown(f"<div class='team-card'><h3>🔵 ALPHA</h3>" + "<br>".join(df_p[df_p['team_name']=="Team Alpha"]['pseudo'].tolist()) + "</div>", unsafe_allow_html=True)
-                            score_a = st.number_input(f"Score Alpha", min_value=0, key=f"sa_{ev['id']}")
-                        with c2:
-                            st.markdown(f"<div class='team-card'><h3>🔴 BRAVO</h3>" + "<br>".join(df_p[df_p['team_name']=="Team Bravo"]['pseudo'].tolist()) + "</div>", unsafe_allow_html=True)
-                            score_b = st.number_input(f"Score Bravo", min_value=0, key=f"sb_{ev['id']}")
+                    # On récupère les joueurs de ce lobby
+                    df_p = pd.read_sql_query("SELECT pseudo, team_name FROM inscriptions WHERE event_id = ?", conn, params=(ev['id'],))
+                    
+                    if df_p.empty:
+                        st.write("Aucun joueur inscrit pour le moment.")
                     else:
-                        st.dataframe(df_p, use_container_width=True)
-                st.divider()
-
+                        # On regroupe les joueurs par le nom de team qu'ils ont saisi
+                        teams = df_p['team_name'].unique()
+                        cols = st.columns(len(teams) if len(teams) > 0 else 1)
+                        
+                        for i, t_name in enumerate(teams):
+                            with cols[i % len(cols)]:
+                                # Liste des pseudos pour cette team précise
+                                pseudos_team = df_p[df_p['team_name'] == t_name]['pseudo'].tolist()
+                                st.markdown(f"""
+                                <div class='team-card'>
+                                    <h3 style='color:#FF4D00 !important;'>{t_name.upper()}</h3>
+                                    <p>{'<br>'.join(pseudos_team)}</p>
+                                    <small>{len(pseudos_team)} joueurs</small>
+                                </div>
+                                """, unsafe_allow_html=True)
 # --- ONGLET 3 : COMMUNAUTÉ & CONTACT (TES INFOS) ---
 with tab_media:
     st.header("Espace Communauté")
