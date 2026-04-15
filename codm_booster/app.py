@@ -67,8 +67,7 @@ conn = get_db_connection()
 st.markdown("<h1 style='text-align: center; font-size: 3.5em;'>🎮 CODM - ORGANISATION</h1>", unsafe_allow_html=True)
 
 # 5. NAVIGATION PAR ONGLETS (On garde tes 3 onglets !)
-tab_home, tab_arena, tab_media = st.tabs([" ACCUEIL", " ARENA (DRAFT 10J)", " COMMUNAUTÉ & CONTACT"])
-
+tab_home, tab_arena, tab_rank, tab_media = st.tabs(["ACCUEIL", "ARENA", "CLASSEMENT", "COMMUNAUTÉ"])
 # --- ONGLET 1 : ACCUEIL ---
 with tab_home:
     col1, col2 = st.columns([2, 1])
@@ -206,7 +205,7 @@ with tab_arena:
                         st.warning("⚠️ Soldat, remplis ton pseudo et le nom de ton équipe !")
 
     # SECTION : SUIVI & TEAMS (AUTOMATIQUE)
-    # SECTION : SUIVI & TEAMS (AUTOMATIQUE)
+
     elif choix == "📊 Suivi & Teams":
         df_ev = pd.read_sql_query("SELECT * FROM evenements", conn)
         
@@ -236,42 +235,33 @@ with tab_arena:
                                 </div>
                                 """, unsafe_allow_html=True)
 
-                        # --- 🚀 AJOUT ICI : LE DASHBOARD DE MATCH ---
-                        st.divider()
-                        
-                        # On définit quand le bouton s'affiche (ex: Scrim avec 2 teams et 10+ joueurs au total)
-                        if ev['type'] == "Scrim" and len(teams) >= 2 and len(df_p) >= 10:
-                            st.success("⚔️ Les effectifs sont complets pour le Scrim !")
-                            
-                            with st.expander("🔥 ACCÉDER AU DASHBOARD DE COMBAT", expanded=False):
-                                st.markdown(f"<h2 style='text-align:center;'>{teams[0]} VS {teams[1]}</h2>", unsafe_allow_html=True)
-                                
-                                # Découpage des maps et modes pour l'affichage
-                                m_list = ev['maps'].split(', ')
-                                mo_list = ev['modes'].split(', ')
-                                
-                                c1, c2, c3 = st.columns(3)
-                                with c1:
-                                    st.info(f"🟢 MAP 1\n\n**{m_list[0] if len(m_list)>0 else 'TBD'}**\n\n{mo_list[0] if len(mo_list)>0 else ''}")
-                                with c2:
-                                    st.info(f"🟡 MAP 2\n\n**{m_list[1] if len(m_list)>1 else 'TBD'}**\n\n{mo_list[1] if len(mo_list)>1 else ''}")
-                                with c3:
-                                    st.info(f"🔴 MAP 3\n\n**{m_list[2] if len(m_list)>2 else 'TBD'}**\n\n{mo_list[2] if len(mo_list)>2 else ''}")
+                        # --- LE DASHBOARD DE MATCH ---
+                                    
+                        st.subheader(" SCORE LIVE (BO3 - Premier à 2 victoires)")
 
-                                st.divider()
-                                st.subheader("🕹️ SCORE LIVE (BO3)")
-                                sc_col1, sc_col2 = st.columns(2)
-                                s1 = sc_col1.number_input(f"Score {teams[0]}", min_value=0, max_value=3, key=f"s1_{ev['id']}")
-                                s2 = sc_col2.number_input(f"Score {teams[1]}", min_value=0, max_value=3, key=f"s2_{ev['id']}")
-                                
-                                if st.button("🏆 TERMINER LE MATCH", key=f"btn_{ev['id']}"):
+                        sc_col1, sc_col2 = st.columns(2)
+                        # On limite à 2 car en BO3, le premier à 2 gagne la série
+                        s1 = sc_col1.number_input(f"Manches {teams[0]}", min_value=0, max_value=2, key=f"s1_{ev['id']}")
+                        s2 = sc_col2.number_input(f"Manches {teams[1]}", min_value=0, max_value=2, key=f"s2_{ev['id']}")
+
+                        # Empêcher l'égalité impossible en fin de BO3
+                        if s1 == 2 and s2 == 2:
+                            st.error("Impossible : En BO3, il ne peut pas y avoir 2-2 !")
+                        else:
+                            mvp = st.selectbox("Sélectionner le MVP du match", ["---"] + list(df_p['pseudo']), key=f"mvp_{ev['id']}")
+                            
+                            if (s1 == 2 or s2 == 2) and mvp != "---":
+                                if st.button("🏆 ENREGISTRER LE RÉSULTAT FINAL", key=f"fin_{ev['id']}"):
+                                    gagnant = teams[0] if s1 > s2 else teams[1]
+                                    # Sauvegarde en base de données (on ajoute le score et le MVP)
+                                    conn.execute("UPDATE evenements SET titre = ? WHERE id = ?", (f"FINI: {ev['titre']}", ev['id']))
+                                    for p in df_p['pseudo']:
+                                        points = 10 if p == mvp else (5 if p in df_p[df_p['team_name']==gagnant]['pseudo'].values else 0)
+                                        conn.execute("UPDATE inscriptions SET score = score + ? WHERE pseudo = ? AND event_id = ?", (points, p, ev['id']))
+                                    conn.commit()
                                     st.balloons()
-                                    st.success(f"Match validé ! Victoire de {'Team 1' if s1 > s2 else 'Team 2'}")
+                                    st.success(f"Match terminé ! Victoire de {gagnant}. MVP: {mvp}")             
 
-                        elif ev['type'] == "Ranked" and len(df_p) >= 5:
-                            st.success("✅ Squad Ranked prête !")
-                            st.info("Lancez la recherche de partie en jeu.")
-                            
 # --- ONGLET 3 : COMMUNAUTÉ & CONTACT (TES INFOS) ---
 with tab_media:
     st.header("Espace Communauté")
@@ -292,5 +282,33 @@ with tab_media:
     c3.link_button("LinkedIn", "https://www.linkedin.com/in/arsène-mbabeh-meye-4823a9258")
     
     st.info("🚀 Disponible pour des projets en Python/SQL.")
+
+# --- ONGLET : CLASSEMENT ---
+with tab_rank:
+    st.header("Hall of Fame - TOP 10")
+    # On récupère le score total de chaque joueur sur tous les matchs
+    df_leaderboard = pd.read_sql_query("""
+        SELECT pseudo, SUM(score) as Total_Points 
+        FROM inscriptions 
+        GROUP BY pseudo 
+        ORDER BY Total_Points DESC 
+        LIMIT 10
+    """, conn)
+
+    if df_leaderboard.empty:
+        st.info("Le classement sera disponible après les premiers matchs terminés.")
+    else:
+        for index, row in df_leaderboard.iterrows():
+            # Design pour le podium
+            color = "#FFD700" if index == 0 else ("#C0C0C0" if index == 1 else "#CD7F32")
+            if index > 2: color = "#FFFFFF"
+            
+            st.markdown(f"""
+                <div style='display: flex; justify-content: space-between; align-items: center; 
+                     background: #1A1A1A; padding: 10px 20px; border-radius: 10px; border-left: 5px solid {color}; margin-bottom: 5px;'>
+                    <span style='font-size: 1.2em; font-weight: bold;'>#{index+1} {row['pseudo']}</span>
+                    <span style='color: #FF4D00; font-weight: bold;'>{row['Total_Points']} PTS</span>
+                </div>
+            """, unsafe_allow_html=True)
 
 conn.close()
