@@ -206,6 +206,7 @@ with tab_arena:
                         st.warning("⚠️ Soldat, remplis ton pseudo et le nom de ton équipe !")
 
     # SECTION : SUIVI & TEAMS (AUTOMATIQUE)
+    # SECTION : SUIVI & TEAMS (AUTOMATIQUE)
     elif choix == "📊 Suivi & Teams":
         df_ev = pd.read_sql_query("SELECT * FROM evenements", conn)
         
@@ -216,19 +217,16 @@ with tab_arena:
                 with st.expander(f"📋 {ev['type']} : {ev['titre']}"):
                     st.write(f"📍 Maps: {ev['maps']} | 🎮 Modes: {ev['modes']}")
                     
-                    # On récupère les joueurs de ce lobby
                     df_p = pd.read_sql_query("SELECT pseudo, team_name FROM inscriptions WHERE event_id = ?", conn, params=(ev['id'],))
                     
                     if df_p.empty:
                         st.write("Aucun joueur inscrit pour le moment.")
                     else:
-                        # On regroupe les joueurs par le nom de team qu'ils ont saisi
                         teams = df_p['team_name'].unique()
                         cols = st.columns(len(teams) if len(teams) > 0 else 1)
                         
                         for i, t_name in enumerate(teams):
                             with cols[i % len(cols)]:
-                                # Liste des pseudos pour cette team précise
                                 pseudos_team = df_p[df_p['team_name'] == t_name]['pseudo'].tolist()
                                 st.markdown(f"""
                                 <div class='team-card'>
@@ -237,6 +235,43 @@ with tab_arena:
                                     <small>{len(pseudos_team)} joueurs</small>
                                 </div>
                                 """, unsafe_allow_html=True)
+
+                        # --- 🚀 AJOUT ICI : LE DASHBOARD DE MATCH ---
+                        st.divider()
+                        
+                        # On définit quand le bouton s'affiche (ex: Scrim avec 2 teams et 10+ joueurs au total)
+                        if ev['type'] == "Scrim" and len(teams) >= 2 and len(df_p) >= 10:
+                            st.success("⚔️ Les effectifs sont complets pour le Scrim !")
+                            
+                            with st.expander("🔥 ACCÉDER AU DASHBOARD DE COMBAT", expanded=False):
+                                st.markdown(f"<h2 style='text-align:center;'>{teams[0]} VS {teams[1]}</h2>", unsafe_allow_html=True)
+                                
+                                # Découpage des maps et modes pour l'affichage
+                                m_list = ev['maps'].split(', ')
+                                mo_list = ev['modes'].split(', ')
+                                
+                                c1, c2, c3 = st.columns(3)
+                                with c1:
+                                    st.info(f"🟢 MAP 1\n\n**{m_list[0] if len(m_list)>0 else 'TBD'}**\n\n{mo_list[0] if len(mo_list)>0 else ''}")
+                                with c2:
+                                    st.info(f"🟡 MAP 2\n\n**{m_list[1] if len(m_list)>1 else 'TBD'}**\n\n{mo_list[1] if len(mo_list)>1 else ''}")
+                                with c3:
+                                    st.info(f"🔴 MAP 3\n\n**{m_list[2] if len(m_list)>2 else 'TBD'}**\n\n{mo_list[2] if len(mo_list)>2 else ''}")
+
+                                st.divider()
+                                st.subheader("🕹️ SCORE LIVE (BO3)")
+                                sc_col1, sc_col2 = st.columns(2)
+                                s1 = sc_col1.number_input(f"Score {teams[0]}", min_value=0, max_value=3, key=f"s1_{ev['id']}")
+                                s2 = sc_col2.number_input(f"Score {teams[1]}", min_value=0, max_value=3, key=f"s2_{ev['id']}")
+                                
+                                if st.button("🏆 TERMINER LE MATCH", key=f"btn_{ev['id']}"):
+                                    st.balloons()
+                                    st.success(f"Match validé ! Victoire de {'Team 1' if s1 > s2 else 'Team 2'}")
+
+                        elif ev['type'] == "Ranked" and len(df_p) >= 5:
+                            st.success("✅ Squad Ranked prête !")
+                            st.info("Lancez la recherche de partie en jeu.")
+                            
 # --- ONGLET 3 : COMMUNAUTÉ & CONTACT (TES INFOS) ---
 with tab_media:
     st.header("Espace Communauté")
